@@ -1,7 +1,10 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Plus, Move, Link2, Trash2, Edit2, GripVertical, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { X, Plus, Move, Link2, Trash2, Edit2, GripVertical, Download, ChevronLeft, ChevronRight, Minus, PlusCircle } from 'lucide-react';
+
+const DEFAULT_PIXELS_PER_YEAR = 100;
+const MIN_YEAR_WIDTH = 50;
 
 const ComplexityTimeline = () => {
   const [layers, setLayers] = useState([]);
@@ -11,6 +14,8 @@ const ComplexityTimeline = () => {
   const [connections, setConnections] = useState([]);
   const [columns, setColumns] = useState([]);
   const [trends, setTrends] = useState([]);
+  const [yearWidths, setYearWidths] = useState({}); // { [year]: width }
+
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [connectingFrom, setConnectingFrom] = useState(null);
   const [draggingEvent, setDraggingEvent] = useState(null);
@@ -21,14 +26,75 @@ const ComplexityTimeline = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [draggingLayer, setDraggingLayer] = useState(null);
-  
+
   const timelineRef = useRef(null);
   const svgRef = useRef(null);
   const exportRef = useRef(null);
 
   const yearSpan = endYear - startYear;
   const layerHeight = 120;
-  const timelineHeight = layers.length * layerHeight + 100;
+
+  const getYearWidth = (year) => yearWidths[year] || DEFAULT_PIXELS_PER_YEAR;
+
+  // Pre-calculate the starting pixel position for each year
+  // yearOffsets[0] is start of startYear
+  // yearOffsets[1] is start of startYear + 1
+  const yearOffsets = useMemo(() => {
+    const offsets = [50]; // Start with padding
+    let currentX = 50;
+    for (let i = 0; i <= yearSpan; i++) {
+      const width = getYearWidth(startYear + i);
+      currentX += width;
+      offsets.push(currentX);
+    }
+    return offsets;
+  }, [startYear, yearSpan, yearWidths]);
+
+  const timelineWidth = Math.max(1200, yearOffsets[yearOffsets.length - 1] + 50);
+  const timelineHeight = Math.max(600, layers.length * layerHeight + 100);
+
+  // Helper: Convert year to pixel X coordinate using variable widths
+  const getYearX = (year) => {
+    if (year < startYear) return 50 - (startYear - year) * DEFAULT_PIXELS_PER_YEAR; // Fallback for out of bounds
+
+    const yearIndex = Math.floor(year - startYear);
+    if (yearIndex < 0) return 50;
+    if (yearIndex >= yearOffsets.length - 1) return yearOffsets[yearOffsets.length - 1];
+
+    const startX = yearOffsets[yearIndex];
+    const width = getYearWidth(Math.floor(year));
+    const fraction = year - Math.floor(year);
+
+    return startX + fraction * width;
+  };
+
+  // Helper: Convert pixel X coordinate to year using variable widths
+  const getXYear = (x) => {
+    // Find the year index where offsets[i] <= x < offsets[i+1]
+    let yearIndex = yearOffsets.findIndex((offset, i) => {
+      if (i === yearOffsets.length - 1) return true; // fallback to last
+      return x >= offset && x < yearOffsets[i + 1];
+    });
+
+    if (yearIndex === -1) {
+      if (x < yearOffsets[0]) yearIndex = 0;
+      else yearIndex = yearOffsets.length - 2;
+    }
+    // ensure we don't go out of bounds of the actual years
+    if (yearIndex >= yearOffsets.length - 1) yearIndex = yearOffsets.length - 2;
+
+    const startX = yearOffsets[yearIndex];
+    const width = getYearWidth(startYear + yearIndex);
+    const fraction = (x - startX) / width;
+
+    return startYear + yearIndex + fraction;
+  };
+
+  const adjustYearWidth = (year, delta) => {
+    const currentWidth = getYearWidth(year);
+    const newWidth = Math.max(MIN_YEAR_WIDTH, currentWidth + delta);
+    setYearWidths(prev => ({ ...prev, [year]: newWidth }));
+  };
 
   const addLayer = (name) => {
     setLayers([...layers, name]);
@@ -38,17 +104,21 @@ const ComplexityTimeline = () => {
   const removeLayer = (index) => {
     const newLayers = layers.filter((_, i) => i !== index);
     setLayers(newLayers);
-    setEvents(events.filter(e => e.layer !== index).map(e => 
+    setEvents(events.filter(e => e.layer !== index).map(e =>
       e.layer > index ? { ...e, layer: e.layer - 1 } : e
     ));
   };
 
   const addEvent = (eventData) => {
+    // Ensure we store only the year, not the percentage x
+    const cleanEventData = { ...eventData };
+    delete cleanEventData.x;
+
     if (editingEvent !== null) {
-      setEvents(events.map((e, i) => i === editingEvent ? eventData : e));
+      setEvents(events.map((e, i) => i === editingEvent ? cleanEventData : e));
       setEditingEvent(null);
     } else {
-      setEvents([...events, eventData]);
+      setEvents([...events, cleanEventData]);
     }
     setShowEventModal(false);
   };
@@ -90,7 +160,8 @@ const ComplexityTimeline = () => {
       events,
       connections,
       columns,
-      trends
+      trends,
+      yearWidths
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -103,70 +174,104 @@ const ComplexityTimeline = () => {
 
   const exportAsPNG = async () => {
     if (!timelineRef.current) return;
-    
+
+    // Create a local helper for year calculations inside export
+    // to mirror the component logic without hooks
+    const localGetYearWidth = (year) => yearWidths[year] || DEFAULT_PIXELS_PER_YEAR;
+
+    const localYearOffsets = [50];
+    let currentX = 50;
+    for (let i = 0; i <= yearSpan; i++) {
+      const width = localGetYearWidth(startYear + i);
+      currentX += width;
+      localYearOffsets.push(currentX);
+    }
+
+    const localGetYearX = (year) => {
+      if (year < startYear) return 50 - (startYear - year) * DEFAULT_PIXELS_PER_YEAR;
+      const yearIndex = Math.floor(year - startYear);
+      if (yearIndex < 0) return 50;
+      if (yearIndex >= localYearOffsets.length - 1) return localYearOffsets[localYearOffsets.length - 1];
+
+      const startX = localYearOffsets[yearIndex];
+      const width = localGetYearWidth(Math.floor(year));
+      const fraction = year - Math.floor(year);
+      return startX + fraction * width;
+    };
+
     // Create a canvas
     const canvas = document.createElement('canvas');
-    const rect = timelineRef.current.getBoundingClientRect();
     const scale = 2; // Higher resolution
-    canvas.width = rect.width * scale;
-    canvas.height = rect.height * scale;
+    // Use the calculated timeline dimensions
+    const width = Math.max(1200, localYearOffsets[localYearOffsets.length - 1] + 50);
+    const height = timelineHeight;
+
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     const ctx = canvas.getContext('2d');
     ctx.scale(scale, scale);
-    
+
     // Fill background
     ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    
+    ctx.fillRect(0, 0, width, height);
+
     // Draw columns
     columns.forEach(col => {
-      const x = (yearToX(col.startYear) / 100) * rect.width;
-      const width = ((yearToX(col.endYear) - yearToX(col.startYear)) / 100) * rect.width;
+      const x = localGetYearX(col.startYear);
+      const colWidth = localGetYearX(col.endYear) - x;
       ctx.fillStyle = 'rgba(243, 244, 246, 0.5)';
-      ctx.fillRect(x, 0, width, rect.height);
+      ctx.fillRect(x, 0, colWidth, height);
       ctx.strokeStyle = 'rgba(209, 213, 219, 1)';
-      ctx.strokeRect(x, 0, width, rect.height);
-      
+      ctx.strokeRect(x, 0, colWidth, height);
+
       ctx.fillStyle = '#374151';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(col.label, x + width / 2, 15);
+      ctx.fillText(col.label, x + colWidth / 2, 15);
     });
-    
+
     // Draw layers
     layers.forEach((layer, i) => {
       const y = i * layerHeight;
       ctx.strokeStyle = '#d1d5db';
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(rect.width, y);
+      ctx.lineTo(width, y);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#374151';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(layer, 8, y + 15, 140);
     });
-    
+
     // Draw connections
     connections.forEach(conn => {
-      const from = getEventPosition(conn.from);
-      const to = getEventPosition(conn.to);
-      
+      // Helper to get position inside export function
+      const getExportEventPos = (idx) => {
+        const ev = events[idx];
+        if (!ev) return { x: 0, y: 0 };
+        return { x: localGetYearX(ev.year), y: ev.layer * layerHeight + 50 };
+      };
+
+      const from = getExportEventPos(conn.from);
+      const to = getExportEventPos(conn.to);
+
       const fromSide = from.x < to.x ? 'right' : 'left';
       const toSide = from.x < to.x ? 'left' : 'right';
-      
+
       const eventWidth = 60;
       const fromX = fromSide === 'right' ? from.x + eventWidth : from.x - eventWidth;
       const toX = toSide === 'left' ? to.x - eventWidth : to.x + eventWidth;
       const fromY = from.y;
       const toY = to.y;
-      
+
       const dx = toX - fromX;
       const cx1 = fromX + dx * 0.5;
       const cy1 = fromY;
       const cx2 = fromX + dx * 0.5;
       const cy2 = toY;
-      
+
       ctx.strokeStyle = conn.color || '#666';
       ctx.lineWidth = conn.width || 2;
       if (conn.lineStyle === 'dashed') {
@@ -176,30 +281,31 @@ const ComplexityTimeline = () => {
       } else {
         ctx.setLineDash([]);
       }
-      
+
       ctx.beginPath();
       ctx.moveTo(fromX, fromY);
       ctx.bezierCurveTo(cx1, cy1, cx2, cy2, toX, toY);
       ctx.stroke();
-      
+
       // Draw arrowhead
       if (conn.showArrow) {
         const angle = Math.atan2(toY - cy2, toX - cx2);
         ctx.fillStyle = conn.color || '#666';
         ctx.beginPath();
+        const arrowLen = 10;
         ctx.moveTo(toX, toY);
-        ctx.lineTo(toX - 10 * Math.cos(angle - Math.PI / 6), toY - 10 * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(toX - 10 * Math.cos(angle + Math.PI / 6), toY - 10 * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(toX - arrowLen * Math.cos(angle - Math.PI / 6), toY - arrowLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(toX - arrowLen * Math.cos(angle + Math.PI / 6), toY - arrowLen * Math.sin(angle + Math.PI / 6));
         ctx.closePath();
         ctx.fill();
       }
     });
-    
+
     // Draw events
     events.forEach(event => {
-      const x = (event.x / 100) * rect.width;
+      const x = localGetYearX(event.year);
       const y = event.layer * layerHeight + 20;
-      
+
       ctx.fillStyle = event.color || '#fff';
       ctx.strokeStyle = event.borderColor || '#333';
       ctx.lineWidth = 2;
@@ -207,7 +313,7 @@ const ComplexityTimeline = () => {
       const boxHeight = 40;
       ctx.fillRect(x - boxWidth / 2, y, boxWidth, boxHeight);
       ctx.strokeRect(x - boxWidth / 2, y, boxWidth, boxHeight);
-      
+
       ctx.fillStyle = '#000';
       ctx.font = event.style === 'italic' ? 'italic 10px sans-serif' : '10px sans-serif';
       ctx.textAlign = 'center';
@@ -227,48 +333,53 @@ const ComplexityTimeline = () => {
       });
       ctx.fillText(line, x, lineY);
     });
-    
+
     // Draw year markers
-    const markerY = rect.height - 48;
+    const markerY = height - 48;
     ctx.strokeStyle = '#9ca3af';
     ctx.beginPath();
     ctx.moveTo(0, markerY);
-    ctx.lineTo(rect.width, markerY);
+    ctx.lineTo(width, markerY);
     ctx.stroke();
-    
-    for (let i = 0; i <= Math.ceil(yearSpan / 5); i++) {
-      const year = startYear + i * 5;
-      if (year > endYear) break;
-      const x = (yearToX(year) / 100) * rect.width;
-      ctx.strokeStyle = '#9ca3af';
+
+    for (let i = 0; i <= yearSpan; i++) {
+      const year = startYear + i;
+      const x = localGetYearX(year);
+      ctx.strokeStyle = '#e5e7eb'; // Lighter for single years
+      if (year % 5 === 0) ctx.strokeStyle = '#9ca3af'; // Darker for 5 years
+
+      const tickHeight = year % 5 === 0 ? 8 : 4;
+
       ctx.beginPath();
       ctx.moveTo(x, markerY);
-      ctx.lineTo(x, markerY + 8);
+      ctx.lineTo(x, markerY + tickHeight);
       ctx.stroke();
-      
-      ctx.fillStyle = '#4b5563';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(year.toString(), x, markerY + 20);
+
+      if (year % 5 === 0 || year === startYear || year === endYear) {
+        ctx.fillStyle = '#4b5563';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(year.toString(), x, markerY + 20);
+      }
     }
-    
+
     // Draw trends
     trends.forEach((trend, i) => {
-      const x = (yearToX(trend.startYear) / 100) * rect.width;
-      const width = ((yearToX(trend.endYear) - yearToX(trend.startYear)) / 100) * rect.width;
-      const y = rect.height - 64 - (i * 8);
-      
+      const x = localGetYearX(trend.startYear);
+      const trendWidth = localGetYearX(trend.endYear) - x;
+      const y = height - 64 - (i * 8);
+
       ctx.fillStyle = trend.color || '#666666';
       ctx.globalAlpha = 0.8;
-      ctx.fillRect(x, y, width, 24);
+      ctx.fillRect(x, y, trendWidth, 24);
       ctx.globalAlpha = 1;
-      
+
       ctx.fillStyle = '#fff';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(trend.label, x + width / 2, y + 15);
+      ctx.fillText(trend.label, x + trendWidth / 2, y + 15);
     });
-    
+
     // Convert to PNG
     canvas.toBlob(blob => {
       const url = URL.createObjectURL(blob);
@@ -283,101 +394,125 @@ const ComplexityTimeline = () => {
   const exportAsPDF = async () => {
     // First create PNG
     if (!timelineRef.current) return;
-    
+
     const canvas = document.createElement('canvas');
-    const rect = timelineRef.current.getBoundingClientRect();
     const scale = 2;
-    canvas.width = rect.width * scale;
-    canvas.height = rect.height * scale;
+    // Mirrored offset calculation for PDF
+    const localGetYearWidth = (year) => yearWidths[year] || DEFAULT_PIXELS_PER_YEAR;
+    const localYearOffsets = [50];
+    let currentX = 50;
+    for (let i = 0; i <= yearSpan; i++) {
+      const width = localGetYearWidth(startYear + i);
+      currentX += width;
+      localYearOffsets.push(currentX);
+    }
+    const width = Math.max(1200, localYearOffsets[localYearOffsets.length - 1] + 50);
+    const height = timelineHeight;
+
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     const ctx = canvas.getContext('2d');
     ctx.scale(scale, scale);
-    
+
+    // Reuse exportAsPNG drawing logic... (simplified here for brevity, in real app refactor to function)
+    const localGetYearX = (year) => {
+      if (year < startYear) return 50 - (startYear - year) * DEFAULT_PIXELS_PER_YEAR;
+      const yearIndex = Math.floor(year - startYear);
+      if (yearIndex < 0) return 50;
+      if (yearIndex >= localYearOffsets.length - 1) return localYearOffsets[localYearOffsets.length - 1];
+      const startX = localYearOffsets[yearIndex];
+      const width = localGetYearWidth(Math.floor(year));
+      const fraction = year - Math.floor(year);
+      return startX + fraction * width;
+    };
+
     // Fill background
     ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    
+    ctx.fillRect(0, 0, width, height);
+
     // Draw columns
     columns.forEach(col => {
-      const x = (yearToX(col.startYear) / 100) * rect.width;
-      const width = ((yearToX(col.endYear) - yearToX(col.startYear)) / 100) * rect.width;
+      const x = localGetYearX(col.startYear);
+      const colWidth = localGetYearX(col.endYear) - x;
       ctx.fillStyle = 'rgba(243, 244, 246, 0.5)';
-      ctx.fillRect(x, 0, width, rect.height);
+      ctx.fillRect(x, 0, colWidth, height);
       ctx.strokeStyle = 'rgba(209, 213, 219, 1)';
-      ctx.strokeRect(x, 0, width, rect.height);
-      
+      ctx.strokeRect(x, 0, colWidth, height);
+
       ctx.fillStyle = '#374151';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(col.label, x + width / 2, 15);
+      ctx.fillText(col.label, x + colWidth / 2, 15);
     });
-    
+
     // Draw layers
     layers.forEach((layer, i) => {
       const y = i * layerHeight;
       ctx.strokeStyle = '#d1d5db';
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(rect.width, y);
+      ctx.lineTo(width, y);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#374151';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(layer, 8, y + 15, 140);
     });
-    
+
     // Draw connections
     connections.forEach(conn => {
-      const from = getEventPosition(conn.from);
-      const to = getEventPosition(conn.to);
-      
+      const getExportEventPos = (idx) => {
+        const ev = events[idx];
+        if (!ev) return { x: 0, y: 0 };
+        return { x: localGetYearX(ev.year), y: ev.layer * layerHeight + 50 };
+      };
+      const from = getExportEventPos(conn.from);
+      const to = getExportEventPos(conn.to);
+      if (!from || !to) return;
+
       const fromSide = from.x < to.x ? 'right' : 'left';
       const toSide = from.x < to.x ? 'left' : 'right';
-      
+
       const eventWidth = 60;
       const fromX = fromSide === 'right' ? from.x + eventWidth : from.x - eventWidth;
       const toX = toSide === 'left' ? to.x - eventWidth : to.x + eventWidth;
       const fromY = from.y;
       const toY = to.y;
-      
+
       const dx = toX - fromX;
       const cx1 = fromX + dx * 0.5;
       const cy1 = fromY;
       const cx2 = fromX + dx * 0.5;
       const cy2 = toY;
-      
+
       ctx.strokeStyle = conn.color || '#666';
       ctx.lineWidth = conn.width || 2;
-      if (conn.lineStyle === 'dashed') {
-        ctx.setLineDash([5, 5]);
-      } else if (conn.lineStyle === 'dotted') {
-        ctx.setLineDash([2, 3]);
-      } else {
-        ctx.setLineDash([]);
-      }
-      
+      ctx.setLineDash(conn.lineStyle === 'dashed' ? [5, 5] : conn.lineStyle === 'dotted' ? [2, 3] : []);
+
       ctx.beginPath();
       ctx.moveTo(fromX, fromY);
       ctx.bezierCurveTo(cx1, cy1, cx2, cy2, toX, toY);
       ctx.stroke();
-      
+
       if (conn.showArrow) {
         const angle = Math.atan2(toY - cy2, toX - cx2);
         ctx.fillStyle = conn.color || '#666';
         ctx.beginPath();
+        const arrowLen = 10;
         ctx.moveTo(toX, toY);
-        ctx.lineTo(toX - 10 * Math.cos(angle - Math.PI / 6), toY - 10 * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(toX - 10 * Math.cos(angle + Math.PI / 6), toY - 10 * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(toX - arrowLen * Math.cos(angle - Math.PI / 6), toY - arrowLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(toX - arrowLen * Math.cos(angle + Math.PI / 6), toY - arrowLen * Math.sin(angle + Math.PI / 6));
         ctx.closePath();
         ctx.fill();
       }
     });
-    
+
     // Draw events
     events.forEach(event => {
-      const x = (event.x / 100) * rect.width;
+      const x = localGetYearX(event.year);
       const y = event.layer * layerHeight + 20;
-      
+
       ctx.fillStyle = event.color || '#fff';
       ctx.strokeStyle = event.borderColor || '#333';
       ctx.lineWidth = 2;
@@ -385,7 +520,7 @@ const ComplexityTimeline = () => {
       const boxHeight = 40;
       ctx.fillRect(x - boxWidth / 2, y, boxWidth, boxHeight);
       ctx.strokeRect(x - boxWidth / 2, y, boxWidth, boxHeight);
-      
+
       ctx.fillStyle = '#000';
       ctx.font = event.style === 'italic' ? 'italic 10px sans-serif' : '10px sans-serif';
       ctx.textAlign = 'center';
@@ -405,86 +540,86 @@ const ComplexityTimeline = () => {
       });
       ctx.fillText(line, x, lineY);
     });
-    
+
     // Draw year markers
-    const markerY = rect.height - 48;
+    const markerY = height - 48;
     ctx.strokeStyle = '#9ca3af';
     ctx.beginPath();
     ctx.moveTo(0, markerY);
-    ctx.lineTo(rect.width, markerY);
+    ctx.lineTo(width, markerY);
     ctx.stroke();
-    
-    for (let i = 0; i <= Math.ceil(yearSpan / 5); i++) {
-      const year = startYear + i * 5;
-      if (year > endYear) break;
-      const x = (yearToX(year) / 100) * rect.width;
-      ctx.strokeStyle = '#9ca3af';
+
+    for (let i = 0; i <= yearSpan; i++) {
+      const year = startYear + i;
+      const x = localGetYearX(year);
+      ctx.strokeStyle = '#e5e7eb';
+      if (year % 5 === 0) ctx.strokeStyle = '#9ca3af';
+
+      const tickHeight = year % 5 === 0 ? 8 : 4;
+
       ctx.beginPath();
       ctx.moveTo(x, markerY);
-      ctx.lineTo(x, markerY + 8);
+      ctx.lineTo(x, markerY + tickHeight);
       ctx.stroke();
-      
-      ctx.fillStyle = '#4b5563';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(year.toString(), x, markerY + 20);
+
+      if (year % 5 === 0 || year === startYear || year === endYear) {
+        ctx.fillStyle = '#4b5563';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(year.toString(), x, markerY + 20);
+      }
     }
-    
+
     // Draw trends
     trends.forEach((trend, i) => {
-      const x = (yearToX(trend.startYear) / 100) * rect.width;
-      const width = ((yearToX(trend.endYear) - yearToX(trend.startYear)) / 100) * rect.width;
-      const y = rect.height - 64 - (i * 8);
-      
+      const x = localGetYearX(trend.startYear);
+      const trendWidth = localGetYearX(trend.endYear) - x;
+      const y = height - 64 - (i * 8);
+
       ctx.fillStyle = trend.color || '#666666';
       ctx.globalAlpha = 0.8;
-      ctx.fillRect(x, y, width, 24);
+      ctx.fillRect(x, y, trendWidth, 24);
       ctx.globalAlpha = 1;
-      
+
       ctx.fillStyle = '#fff';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(trend.label, x + width / 2, y + 15);
+      ctx.fillText(trend.label, x + trendWidth / 2, y + 15);
     });
-    
-    // Convert canvas to PDF using jsPDF via CDN
+
+    // Convert canvas to PDF
     const imgData = canvas.toDataURL('image/png');
-    
-    // Create PDF with jsPDF
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
     script.onload = () => {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({
-        orientation: rect.width > rect.height ? 'landscape' : 'portrait',
+        orientation: width > height ? 'landscape' : 'portrait',
         unit: 'px',
-        format: [rect.width, rect.height]
+        format: [width, height]
       });
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, rect.width, rect.height);
+
+      pdf.addImage(imgData, 'PNG', 0, 0, width, height);
       pdf.save('timeline.pdf');
     };
     document.head.appendChild(script);
   };
 
-  const yearToX = (year) => {
-    return ((year - startYear) / yearSpan) * 100;
-  };
-
   const handleTimelineClick = (e) => {
-    if (showEventModal || e.target.closest('.event-item')) return;
-    
+    if (showEventModal || e.target.closest('.event-item') || e.target.closest('.year-marker-btn')) return;
+
+    // Calculate click year based on pixel position
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const x = e.clientX - rect.left + timelineRef.current.scrollLeft;
     const y = e.clientY - rect.top;
-    
+
     const layer = Math.floor(y / layerHeight);
     if (layer >= layers.length) return;
-    
-    const year = startYear + (x / 100) * yearSpan;
-    
+
+    const year = getXYear(e.clientX - rect.left); // Use visual offset
+
     setEditingEvent(null);
-    setShowEventModal({ x, year: Math.round(year), layer });
+    setShowEventModal({ year: Math.round(year * 10) / 10, layer }); // Round to decimal
   };
 
   const handleEventClick = (e, index) => {
@@ -514,17 +649,18 @@ const ComplexityTimeline = () => {
     if (draggingEvent === null) return;
 
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    // For dropping, we care about the relative position in the container
+    const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const layer = Math.floor(y / layerHeight);
-    
+
     if (layer >= layers.length || layer < 0) return;
-    
-    const year = startYear + (x / 100) * yearSpan;
-    
-    setEvents(events.map((event, i) => 
-      i === draggingEvent 
-        ? { ...event, x, year: Math.round(year), layer }
+
+    const year = getXYear(x);
+
+    setEvents(events.map((event, i) =>
+      i === draggingEvent
+        ? { ...event, year: Math.round(year * 10) / 10, layer }
         : event
     ));
     setDraggingEvent(null);
@@ -533,12 +669,10 @@ const ComplexityTimeline = () => {
   const getEventPosition = (eventIndex) => {
     const event = events[eventIndex];
     if (!event) return { x: 0, y: 0, side: 'right' };
-    const rect = timelineRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0, side: 'right' };
-    
-    const centerX = (event.x / 100) * rect.width;
+
+    const centerX = getYearX(event.year);
     const centerY = event.layer * layerHeight + 50;
-    
+
     return {
       x: centerX,
       y: centerY,
@@ -550,7 +684,7 @@ const ComplexityTimeline = () => {
   return (
     <div className="w-full h-screen bg-gray-50 flex flex-col">
       {/* Toolbar */}
-      <div className="bg-white border-b p-4 flex gap-2 flex-wrap">
+      <div className="bg-white border-b p-4 flex gap-2 flex-wrap items-center">
         <button onClick={() => setShowLayerModal(true)} className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2">
           <Plus size={16} /> Add Layer
         </button>
@@ -564,7 +698,7 @@ const ComplexityTimeline = () => {
           <Plus size={16} /> Add Trend ({trends.length}/4)
         </button>
         <div className="relative ml-auto">
-          <button 
+          <button
             onClick={() => setShowExportMenu(!showExportMenu)}
             className="px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 flex items-center gap-2"
           >
@@ -602,36 +736,35 @@ const ComplexityTimeline = () => {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Start:</label>
-          <input 
-            type="number" 
-            value={startYear} 
-            onChange={(e) => setStartYear(Number(e.target.value))}
-            className="w-20 px-2 py-1 border rounded"
-          />
-          <label className="text-sm">End:</label>
-          <input 
-            type="number" 
-            value={endYear} 
-            onChange={(e) => setEndYear(Number(e.target.value))}
-            className="w-20 px-2 py-1 border rounded"
-          />
+        <div className="flex items-center gap-2 border-l pl-4 ml-4">
+          <span className="text-sm font-semibold text-gray-700">Timeline Range:</span>
+
+          <div className="flex items-center bg-gray-100 rounded p-1">
+            <button onClick={() => setStartYear(startYear - 1)} className="p-1 hover:bg-gray-200 rounded text-gray-600"><ChevronLeft size={16} /></button>
+            <span className="px-2 font-mono text-sm">{startYear}</span>
+            <button onClick={() => setStartYear(startYear + 1)} className="p-1 hover:bg-gray-200 rounded text-gray-600"><ChevronRight size={16} /></button>
+          </div>
+          <span className="text-gray-400">-</span>
+          <div className="flex items-center bg-gray-100 rounded p-1">
+            <button onClick={() => setEndYear(endYear - 1)} className="p-1 hover:bg-gray-200 rounded text-gray-600"><ChevronLeft size={16} /></button>
+            <span className="px-2 font-mono text-sm">{endYear}</span>
+            <button onClick={() => setEndYear(endYear + 1)} className="p-1 hover:bg-gray-200 rounded text-gray-600"><ChevronRight size={16} /></button>
+          </div>
         </div>
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-auto p-8">
-        <div 
+      <div className="flex-1 overflow-auto p-8 relative">
+        <div
           ref={timelineRef}
-          className="relative bg-white border rounded shadow-lg"
-          style={{ height: timelineHeight, minWidth: '1200px' }}
+          className="relative bg-white border rounded shadow-lg transition-all duration-300"
+          style={{ width: `${timelineWidth}px`, height: `${timelineHeight}px` }}
           onClick={handleTimelineClick}
           onDragOver={handleEventDragOver}
           onDrop={handleEventDrop}
         >
           {/* SVG for connections */}
-          <svg 
+          <svg
             ref={svgRef}
             className="absolute inset-0 pointer-events-none"
             style={{ width: '100%', height: '100%' }}
@@ -654,27 +787,29 @@ const ComplexityTimeline = () => {
             {connections.map((conn, i) => {
               const from = getEventPosition(conn.from);
               const to = getEventPosition(conn.to);
-              
+
+              if (!from || !to) return null;
+
               // Determine which side each event should connect from
               const fromSide = from.x < to.x ? 'right' : 'left';
               const toSide = from.x < to.x ? 'left' : 'right';
-              
+
               // Calculate connection points on the sides of events
               const eventWidth = 60; // half the approximate event width
               const fromX = fromSide === 'right' ? from.x + eventWidth : from.x - eventWidth;
               const toX = toSide === 'left' ? to.x - eventWidth : to.x + eventWidth;
               const fromY = from.y;
               const toY = to.y;
-              
+
               // Calculate control points for S-curve
               const dx = toX - fromX;
               const cx1 = fromX + dx * 0.5;
               const cy1 = fromY;
               const cx2 = fromX + dx * 0.5;
               const cy2 = toY;
-              
+
               const path = `M ${fromX} ${fromY} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${toX} ${toY}`;
-              
+
               return (
                 <path
                   key={i}
@@ -682,8 +817,8 @@ const ComplexityTimeline = () => {
                   stroke={conn.color || '#666'}
                   strokeWidth={conn.width || 2}
                   strokeDasharray={
-                    conn.lineStyle === 'dashed' ? '5,5' : 
-                    conn.lineStyle === 'dotted' ? '2,3' : '0'
+                    conn.lineStyle === 'dashed' ? '5,5' :
+                      conn.lineStyle === 'dotted' ? '2,3' : '0'
                   }
                   fill="none"
                   markerEnd={conn.showArrow ? `url(#arrowhead-${i})` : 'none'}
@@ -693,34 +828,37 @@ const ComplexityTimeline = () => {
           </svg>
 
           {/* Columns */}
-          {columns.map((col, i) => (
-            <div
-              key={i}
-              className="absolute top-0 bottom-0 bg-gray-100 border-x border-gray-300 opacity-50"
-              style={{
-                left: `${yearToX(col.startYear)}%`,
-                width: `${yearToX(col.endYear) - yearToX(col.startYear)}%`
-              }}
-            >
-              <div className="absolute top-2 left-1/2 transform -translate-x-1/2 text-sm font-semibold text-gray-700 whitespace-nowrap">
-                {col.label}
+          {columns.map((col, i) => {
+            const left = getYearX(col.startYear);
+            const width = getYearX(col.endYear) - left;
+            return (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0 bg-gray-100 border-x border-gray-300 opacity-50"
+                style={{
+                  left: `${left}px`,
+                  width: `${width}px`
+                }}
+              >
+                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 text-sm font-semibold text-gray-700 whitespace-nowrap">
+                  {col.label}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Layers */}
           {layers.map((layer, i) => (
             <div
               key={i}
-              className="absolute border-b border-gray-300"
+              className="absolute border-b border-gray-300 left-0 right-0"
               style={{
                 top: i * layerHeight,
-                left: 0,
-                right: 0,
-                height: layerHeight
+                height: layerHeight,
+                width: '100%' // Ensure full width
               }}
             >
-              <div className="absolute left-2 top-2 font-semibold text-sm text-gray-700 max-w-[150px] leading-tight">
+              <div className="sticky left-2 top-2 font-semibold text-sm text-gray-700 max-w-[150px] leading-tight z-10">
                 {layer}
                 <button
                   onClick={(e) => {
@@ -736,19 +874,49 @@ const ComplexityTimeline = () => {
           ))}
 
           {/* Year markers */}
-          <div className="absolute bottom-0 left-0 right-0 h-12 border-t border-gray-400">
-            {Array.from({ length: Math.ceil(yearSpan / 5) + 1 }, (_, i) => {
-              const year = startYear + i * 5;
-              if (year > endYear) return null;
+          <div className="absolute bottom-0 left-0 right-0 h-16 border-t border-gray-400">
+            {Array.from({ length: yearSpan + 1 }, (_, i) => {
+              const year = startYear + i;
+              const currentX = getYearX(year);
+              // We render width control at the middle of the year span
+              const nextX = getYearX(year + 1);
+              const yearWidth = nextX - currentX;
+              const midX = currentX + yearWidth / 2;
+
               return (
-                <div
-                  key={year}
-                  className="absolute text-xs text-gray-600"
-                  style={{ left: `${yearToX(year)}%`, transform: 'translateX(-50%)' }}
-                >
-                  <div className="h-2 w-px bg-gray-400 mx-auto"></div>
-                  {year}
-                </div>
+                <React.Fragment key={year}>
+                  {/* Tick mark */}
+                  <div
+                    className="absolute text-xs text-gray-600"
+                    style={{ left: `${currentX}px`, transform: 'translateX(-50%)' }}
+                  >
+                    <div className={`w-px bg-gray-400 mx-auto ${year % 5 === 0 ? 'h-3' : 'h-1'}`}></div>
+                    {year % 5 === 0 ? <div className="mt-1">{year}</div> : null}
+                  </div>
+
+                  {/* Width Controls (visible on hover group usually, but here always for simplicity) */}
+                  {i < yearSpan && (
+                    <div
+                      className="absolute bottom-1 flex gap-1 items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-white/80 p-1 rounded shadow-sm border"
+                      style={{ left: `${midX}px`, transform: 'translateX(-50%)' }}
+                    >
+                      <button
+                        className="p-0.5 hover:bg-gray-200 rounded text-gray-600 year-marker-btn"
+                        onClick={(e) => { e.stopPropagation(); adjustYearWidth(year, -10); }}
+                        title="Shrink Year"
+                      >
+                        <Minus size={10} />
+                      </button>
+                      <button
+                        className="p-0.5 hover:bg-gray-200 rounded text-gray-600 year-marker-btn"
+                        onClick={(e) => { e.stopPropagation(); adjustYearWidth(year, 10); }}
+                        title="Expand Year"
+                      >
+                        <Plus size={10} />
+                      </button>
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
@@ -760,27 +928,25 @@ const ComplexityTimeline = () => {
               draggable
               onDragStart={(e) => handleEventDragStart(e, i)}
               onClick={(e) => handleEventClick(e, i)}
-              className={`event-item absolute cursor-move ${
-                selectedEvent === i ? 'ring-2 ring-blue-500' : ''
-              } ${connectingFrom === i ? 'ring-2 ring-green-500' : ''}`}
+              className={`event-item absolute cursor-move ${selectedEvent === i ? 'ring-2 ring-blue-500' : ''
+                } ${connectingFrom === i ? 'ring-2 ring-green-500' : ''}`}
               style={{
-                left: `${event.x}%`,
+                left: `${getYearX(event.year)}px`,
                 top: `${event.layer * layerHeight + 20}px`,
                 transform: 'translateX(-50%)',
                 maxWidth: '120px'
               }}
             >
-              <div className={`px-3 py-2 rounded shadow-md text-xs text-center border-2 ${
-                event.style === 'italic' ? 'italic' : ''
-              }`}
-              style={{ 
-                backgroundColor: event.color || '#fff',
-                borderColor: event.borderColor || '#333'
-              }}>
+              <div className={`px-3 py-2 rounded shadow-md text-xs text-center border-2 ${event.style === 'italic' ? 'italic' : ''
+                }`}
+                style={{
+                  backgroundColor: event.color || '#fff',
+                  borderColor: event.borderColor || '#333'
+                }}>
                 {event.label}
               </div>
               {selectedEvent === i && (
-                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 flex gap-1 bg-white rounded shadow-lg p-1">
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 flex gap-1 bg-white rounded shadow-lg p-1 z-20">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -818,363 +984,243 @@ const ComplexityTimeline = () => {
           ))}
 
           {/* Trends */}
-          <div className="absolute left-0 right-0 bottom-16 h-8">
-            {trends.map((trend, i) => (
+          {trends.map((trend, i) => {
+            const left = getYearX(trend.startYear);
+            const width = getYearX(trend.endYear) - left;
+            const top = timelineHeight - 64 - (i * 28); // Dynamic positioning from bottom
+
+            return (
               <div
                 key={i}
-                className="absolute h-6 text-white text-xs flex items-center justify-center opacity-80"
+                className="absolute rounded"
                 style={{
-                  left: `${yearToX(trend.startYear)}%`,
-                  width: `${yearToX(trend.endYear) - yearToX(trend.startYear)}%`,
-                  bottom: `${i * 8}px`,
-                  backgroundColor: trend.color || '#666666'
+                  left: `${left}px`,
+                  width: `${width}px`,
+                  top: top, // Fixed height from bottom
+                  height: '24px',
+                  backgroundColor: trend.color || '#666666',
+                  opacity: 0.8
                 }}
               >
-                {trend.label}
+                <div className="w-full h-full flex items-center justify-center text-xs text-white px-2 overflow-hidden whitespace-nowrap">
+                  {trend.label}
+                </div>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       </div>
 
-      {/* Layer Modal */}
+      {/* Modals */}
       {showLayerModal && (
-        <Modal onClose={() => setShowLayerModal(false)} title="Add Layer">
-          <input
-            type="text"
-            placeholder="Layer name"
-            className="w-full px-3 py-2 border rounded"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.target.value) {
-                addLayer(e.target.value);
-              }
-            }}
-          />
-          <button
-            onClick={(e) => {
-              const input = e.target.parentElement.querySelector('input');
-              if (input.value) addLayer(input.value);
-            }}
-            className="mt-3 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Add
-          </button>
-        </Modal>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h2 className="text-xl font-bold mb-4">Add New Layer</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              addLayer(e.target.layerName.value);
+            }}>
+              <input
+                name="layerName"
+                placeholder="Layer Name"
+                className="w-full p-2 border rounded mb-4"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowLayerModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      {/* Event Modal */}
       {showEventModal && (
-        <EventModal
-          onClose={() => {
-            setShowEventModal(false);
-            setEditingEvent(null);
-          }}
-          onSave={addEvent}
-          layers={layers}
-          startYear={startYear}
-          endYear={endYear}
-          initialData={editingEvent !== null ? events[editingEvent] : showEventModal}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h2 className="text-xl font-bold mb-4">{editingEvent !== null ? 'Edit Event' : 'Add New Event'}</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              addEvent({
+                label: formData.get('label'),
+                year: Number(formData.get('year')),
+                layer: showEventModal.layer !== undefined ? showEventModal.layer : (editingEvent !== null ? events[editingEvent].layer : 0),
+                style: formData.get('style'),
+                color: formData.get('color'),
+                borderColor: formData.get('borderColor'),
+                // Only for positioning, not persistent if we used drag
+                x: 0,
+              });
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Event Label</label>
+                <input
+                  name="label"
+                  defaultValue={editingEvent !== null ? events[editingEvent].label : ''}
+                  className="w-full p-2 border rounded"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Year</label>
+                <input
+                  name="year"
+                  type="number"
+                  step="0.1"
+                  defaultValue={editingEvent !== null ? events[editingEvent].year : showEventModal.year}
+                  className="w-full p-2 border rounded"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Style</label>
+                <select name="style" defaultValue={editingEvent !== null ? events[editingEvent].style : 'normal'} className="w-full p-2 border rounded">
+                  <option value="normal">Normal</option>
+                  <option value="italic">Italic</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Background</label>
+                  <input name="color" type="color" defaultValue={editingEvent !== null ? events[editingEvent].color : '#ffffff'} className="w-full h-10 p-1 border rounded" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Border</label>
+                  <input name="borderColor" type="color" defaultValue={editingEvent !== null ? events[editingEvent].borderColor : '#000000'} className="w-full h-10 p-1 border rounded" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowEventModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      {/* Column Modal */}
+      {showConnectionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h2 className="text-xl font-bold mb-4">Connection Style</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              addConnection({
+                ...connectionData,
+                lineStyle: formData.get('lineStyle'),
+                color: formData.get('color'),
+                width: Number(formData.get('width')),
+                showArrow: formData.get('showArrow') === 'on'
+              });
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Line Style</label>
+                <select name="lineStyle" defaultValue="solid" className="w-full p-2 border rounded">
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Color</label>
+                <input name="color" type="color" defaultValue="#666666" className="w-full h-10 p-1 border rounded" />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Width</label>
+                <input name="width" type="range" min="1" max="10" defaultValue="2" className="w-full" />
+              </div>
+              <div className="mb-4 flex items-center gap-2">
+                <input name="showArrow" type="checkbox" id="showArrow" defaultChecked />
+                <label htmlFor="showArrow" className="text-sm font-medium text-gray-700">Show Arrow</label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowConnectionModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Connect</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showColumnModal && (
-        <ColumnModal
-          onClose={() => setShowColumnModal(false)}
-          onSave={addColumn}
-          startYear={startYear}
-          endYear={endYear}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h2 className="text-xl font-bold mb-4">Add Column</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              addColumn({
+                label: formData.get('label'),
+                startYear: Number(formData.get('startYear')),
+                endYear: Number(formData.get('endYear'))
+              });
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Label</label>
+                <input name="label" required className="w-full p-2 border rounded" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Start Year</label>
+                  <input name="startYear" type="number" defaultValue={startYear} required className="w-full p-2 border rounded" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">End Year</label>
+                  <input name="endYear" type="number" defaultValue={endYear} required className="w-full p-2 border rounded" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowColumnModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      {/* Trend Modal */}
       {showTrendModal && (
-        <TrendModal
-          onClose={() => setShowTrendModal(false)}
-          onSave={addTrend}
-          startYear={startYear}
-          endYear={endYear}
-        />
-      )}
-
-      {/* Connection Modal */}
-      {showConnectionModal && connectionData && (
-        <ConnectionModal
-          onClose={() => {
-            setShowConnectionModal(false);
-            setConnectionData(null);
-          }}
-          onSave={addConnection}
-          from={connectionData.from}
-          to={connectionData.to}
-        />
-      )}
-    </div>
-  );
-};
-
-const Modal = ({ onClose, title, children }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-          <X size={20} />
-        </button>
-      </div>
-      {children}
-    </div>
-  </div>
-);
-
-const EventModal = ({ onClose, onSave, layers, startYear, endYear, initialData }) => {
-  const [label, setLabel] = useState(initialData?.label || '');
-  const [year, setYear] = useState(initialData?.year || Math.round((startYear + endYear) / 2));
-  const [layer, setLayer] = useState(initialData?.layer || 0);
-  const [color, setColor] = useState(initialData?.color || '#ffffff');
-  const [borderColor, setBorderColor] = useState(initialData?.borderColor || '#333333');
-  const [style, setStyle] = useState(initialData?.style || 'normal');
-
-  const handleSave = () => {
-    const x = ((year - startYear) / (endYear - startYear)) * 100;
-    onSave({ label, year, layer, x, color, borderColor, style });
-  };
-
-  return (
-    <Modal onClose={onClose} title={initialData?.label ? "Edit Event" : "Add Event"}>
-      <div className="space-y-3">
-        <input
-          type="text"
-          placeholder="Event label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
-        />
-        <div>
-          <label className="block text-sm mb-1">Year</label>
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            min={startYear}
-            max={endYear}
-            className="w-full px-3 py-2 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Layer</label>
-          <select
-            value={layer}
-            onChange={(e) => setLayer(Number(e.target.value))}
-            className="w-full px-3 py-2 border rounded"
-          >
-            {layers.map((l, i) => (
-              <option key={i} value={i}>{l}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="block text-sm mb-1">Background</label>
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="w-full h-10 border rounded"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-sm mb-1">Border</label>
-            <input
-              type="color"
-              value={borderColor}
-              onChange={(e) => setBorderColor(e.target.value)}
-              className="w-full h-10 border rounded"
-            />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h2 className="text-xl font-bold mb-4">Add Trend</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              addTrend({
+                label: formData.get('label'),
+                startYear: Number(formData.get('startYear')),
+                endYear: Number(formData.get('endYear')),
+                color: formData.get('color')
+              });
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Label</label>
+                <input name="label" required className="w-full p-2 border rounded" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Start Year</label>
+                  <input name="startYear" type="number" defaultValue={startYear} required className="w-full p-2 border rounded" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">End Year</label>
+                  <input name="endYear" type="number" defaultValue={endYear} required className="w-full p-2 border rounded" />
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Color</label>
+                <input name="color" type="color" defaultValue="#666666" className="w-full h-10 p-1 border rounded" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowTrendModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Add</button>
+              </div>
+            </form>
           </div>
         </div>
-        <div>
-          <label className="block text-sm mb-1">Style</label>
-          <select
-            value={style}
-            onChange={(e) => setStyle(e.target.value)}
-            className="w-full px-3 py-2 border rounded"
-          >
-            <option value="normal">Normal</option>
-            <option value="italic">Italic</option>
-          </select>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={!label}
-          className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300"
-        >
-          {initialData?.label ? 'Update' : 'Add'} Event
-        </button>
-      </div>
-    </Modal>
-  );
-};
-
-const ColumnModal = ({ onClose, onSave, startYear, endYear }) => {
-  const [label, setLabel] = useState('');
-  const [colStartYear, setColStartYear] = useState(startYear);
-  const [colEndYear, setColEndYear] = useState(endYear);
-
-  return (
-    <Modal onClose={onClose} title="Add Column">
-      <div className="space-y-3">
-        <input
-          type="text"
-          placeholder="Column label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
-        />
-        <div>
-          <label className="block text-sm mb-1">Start Year</label>
-          <input
-            type="number"
-            value={colStartYear}
-            onChange={(e) => setColStartYear(Number(e.target.value))}
-            className="w-full px-3 py-2 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">End Year</label>
-          <input
-            type="number"
-            value={colEndYear}
-            onChange={(e) => setColEndYear(Number(e.target.value))}
-            className="w-full px-3 py-2 border rounded"
-          />
-        </div>
-        <button
-          onClick={() => onSave({ label, startYear: colStartYear, endYear: colEndYear })}
-          disabled={!label}
-          className="w-full px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-300"
-        >
-          Add Column
-        </button>
-      </div>
-    </Modal>
-  );
-};
-
-const TrendModal = ({ onClose, onSave, startYear, endYear }) => {
-  const [label, setLabel] = useState('');
-  const [trendStartYear, setTrendStartYear] = useState(startYear);
-  const [trendEndYear, setTrendEndYear] = useState(endYear);
-  const [color, setColor] = useState('#666666');
-
-  return (
-    <Modal onClose={onClose} title="Add Trend">
-      <div className="space-y-3">
-        <input
-          type="text"
-          placeholder="Trend label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
-        />
-        <div>
-          <label className="block text-sm mb-1">Start Year</label>
-          <input
-            type="number"
-            value={trendStartYear}
-            onChange={(e) => setTrendStartYear(Number(e.target.value))}
-            className="w-full px-3 py-2 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">End Year</label>
-          <input
-            type="number"
-            value={trendEndYear}
-            onChange={(e) => setTrendEndYear(Number(e.target.value))}
-            className="w-full px-3 py-2 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Color</label>
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="w-full h-10 border rounded"
-          />
-        </div>
-        <button
-          onClick={() => onSave({ label, startYear: trendStartYear, endYear: trendEndYear, color })}
-          disabled={!label}
-          className="w-full px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:bg-gray-300"
-        >
-          Add Trend
-        </button>
-      </div>
-    </Modal>
-  );
-};
-
-const ConnectionModal = ({ onClose, onSave, from, to }) => {
-  const [color, setColor] = useState('#666666');
-  const [lineStyle, setLineStyle] = useState('solid');
-  const [width, setWidth] = useState(2);
-  const [showArrow, setShowArrow] = useState(true);
-
-  return (
-    <Modal onClose={onClose} title="Connection Settings">
-      <div className="space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Line Color</label>
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="w-full h-10 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Line Style</label>
-          <select
-            value={lineStyle}
-            onChange={(e) => setLineStyle(e.target.value)}
-            className="w-full px-3 py-2 border rounded"
-          >
-            <option value="solid">Solid</option>
-            <option value="dashed">Dashed</option>
-            <option value="dotted">Dotted</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Line Width: {width}px</label>
-          <input
-            type="range"
-            min="1"
-            max="6"
-            value={width}
-            onChange={(e) => setWidth(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="showArrow"
-            checked={showArrow}
-            onChange={(e) => setShowArrow(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <label htmlFor="showArrow" className="text-sm">Show Arrowhead</label>
-        </div>
-        <button
-          onClick={() => onSave({ from, to, color, lineStyle, width, showArrow })}
-          className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          Create Connection
-        </button>
-      </div>
-    </Modal>
+      )}
+    </div>
   );
 };
 

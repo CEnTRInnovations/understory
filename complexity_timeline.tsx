@@ -1,24 +1,56 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Plus, Move, Link2, Trash2, Edit2, GripVertical, Download } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Plus, Link2, Trash2, Edit2, Download } from 'lucide-react';
+
+type TimelineEvent = {
+  label: string;
+  year: number;
+  layer: number;
+  x: number;
+  color: string;
+  borderColor: string;
+  style: string;
+};
+
+type Connection = {
+  from: number;
+  to: number;
+  color: string;
+  lineStyle: string;
+  width: number;
+  showArrow: boolean;
+};
+
+type Column = {
+  label: string;
+  startYear: number;
+  endYear: number;
+};
+
+type Trend = {
+  label: string;
+  startYear: number;
+  endYear: number;
+  color: string;
+};
 
 const ComplexityTimeline = () => {
-  const [layers, setLayers] = useState([]);
+  const [layers, setLayers] = useState<string[]>([]);
   const [startYear, setStartYear] = useState(2008);
   const [endYear, setEndYear] = useState(2025);
-  const [events, setEvents] = useState([]);
-  const [connections, setConnections] = useState([]);
-  const [columns, setColumns] = useState([]);
-  const [trends, setTrends] = useState([]);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [connectingFrom, setConnectingFrom] = useState(null);
-  const [draggingEvent, setDraggingEvent] = useState(null);
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [trends, setTrends] = useState<Trend[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
+  const [connectingFrom, setConnectingFrom] = useState<number | null>(null);
+  const [draggingEvent, setDraggingEvent] = useState<number | null>(null);
   const [showLayerModal, setShowLayerModal] = useState(false);
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [showTrendModal, setShowTrendModal] = useState(false);
-  const [showEventModal, setShowEventModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState<boolean | Partial<TimelineEvent>>(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
-  const [draggingLayer, setDraggingLayer] = useState(null);
+  const [editingEvent, setEditingEvent] = useState<number | null>(null);
+  const [draggingLayer, setDraggingLayer] = useState<number | null>(null);
   
   const timelineRef = useRef(null);
   const svgRef = useRef(null);
@@ -28,7 +60,7 @@ const ComplexityTimeline = () => {
   const layerHeight = 120;
   const timelineHeight = layers.length * layerHeight + 100;
 
-  const addLayer = (name) => {
+  const addLayer = (name: string) => {
     setLayers([...layers, name]);
     setShowLayerModal(false);
   };
@@ -41,7 +73,7 @@ const ComplexityTimeline = () => {
     ));
   };
 
-  const addEvent = (eventData) => {
+  const addEvent = (eventData: TimelineEvent) => {
     if (editingEvent !== null) {
       setEvents(events.map((e, i) => i === editingEvent ? eventData : e));
       setEditingEvent(null);
@@ -58,20 +90,20 @@ const ComplexityTimeline = () => {
   };
 
   const [showConnectionModal, setShowConnectionModal] = useState(false);
-  const [connectionData, setConnectionData] = useState(null);
+  const [connectionData, setConnectionData] = useState<{ from: number; to: number } | null>(null);
 
-  const addConnection = (connectionSettings) => {
+  const addConnection = (connectionSettings: Connection) => {
     setConnections([...connections, connectionSettings]);
     setConnectingFrom(null);
     setShowConnectionModal(false);
   };
 
-  const addColumn = (columnData) => {
+  const addColumn = (columnData: Column) => {
     setColumns([...columns, columnData]);
     setShowColumnModal(false);
   };
 
-  const addTrend = (trendData) => {
+  const addTrend = (trendData: Trend) => {
     if (trends.length >= 4) {
       alert('Maximum of 4 trends allowed');
       return;
@@ -108,7 +140,7 @@ const ComplexityTimeline = () => {
     const scale = 2; // Higher resolution
     canvas.width = rect.width * scale;
     canvas.height = rect.height * scale;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
     ctx.scale(scale, scale);
     
     // Fill background
@@ -269,6 +301,7 @@ const ComplexityTimeline = () => {
     
     // Convert to PNG
     canvas.toBlob(blob => {
+      if (!blob) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -287,7 +320,7 @@ const ComplexityTimeline = () => {
     const scale = 2;
     canvas.width = rect.width * scale;
     canvas.height = rect.height * scale;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
     ctx.scale(scale, scale);
     
     // Fill background
@@ -452,7 +485,7 @@ const ComplexityTimeline = () => {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
     script.onload = () => {
-      const { jsPDF } = window.jspdf;
+      const { jsPDF } = (window as unknown as { jspdf: { jsPDF: new (...args: unknown[]) => { addImage: (...a: unknown[]) => void; save: (n: string) => void } } }).jspdf;
       const pdf = new jsPDF({
         orientation: rect.width > rect.height ? 'landscape' : 'portrait',
         unit: 'px',
@@ -842,16 +875,16 @@ const ComplexityTimeline = () => {
             type="text"
             placeholder="Layer name"
             className="w-full px-3 py-2 border rounded"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.target.value) {
-                addLayer(e.target.value);
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.target as HTMLInputElement).value) {
+                addLayer((e.target as HTMLInputElement).value);
               }
             }}
           />
           <button
             onClick={(e) => {
-              const input = e.target.parentElement.querySelector('input');
-              if (input.value) addLayer(input.value);
+              const input = (e.target as HTMLElement).closest('div')?.querySelector('input') as HTMLInputElement | null;
+              if (input?.value) addLayer(input.value);
             }}
             className="mt-3 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
@@ -911,7 +944,7 @@ const ComplexityTimeline = () => {
   );
 };
 
-const Modal = ({ onClose, title, children }) => (
+const Modal = ({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
       <div className="flex justify-between items-center mb-4">
@@ -925,7 +958,14 @@ const Modal = ({ onClose, title, children }) => (
   </div>
 );
 
-const EventModal = ({ onClose, onSave, layers, startYear, endYear, initialData }) => {
+const EventModal = ({ onClose, onSave, layers, startYear, endYear, initialData }: {
+  onClose: () => void;
+  onSave: (data: TimelineEvent) => void;
+  layers: string[];
+  startYear: number;
+  endYear: number;
+  initialData?: Partial<TimelineEvent>;
+}) => {
   const [label, setLabel] = useState(initialData?.label || '');
   const [year, setYear] = useState(initialData?.year || Math.round((startYear + endYear) / 2));
   const [layer, setLayer] = useState(initialData?.layer || 0);
@@ -1014,7 +1054,12 @@ const EventModal = ({ onClose, onSave, layers, startYear, endYear, initialData }
   );
 };
 
-const ColumnModal = ({ onClose, onSave, startYear, endYear }) => {
+const ColumnModal = ({ onClose, onSave, startYear, endYear }: {
+  onClose: () => void;
+  onSave: (data: Column) => void;
+  startYear: number;
+  endYear: number;
+}) => {
   const [label, setLabel] = useState('');
   const [colStartYear, setColStartYear] = useState(startYear);
   const [colEndYear, setColEndYear] = useState(endYear);
@@ -1059,7 +1104,12 @@ const ColumnModal = ({ onClose, onSave, startYear, endYear }) => {
   );
 };
 
-const TrendModal = ({ onClose, onSave, startYear, endYear }) => {
+const TrendModal = ({ onClose, onSave, startYear, endYear }: {
+  onClose: () => void;
+  onSave: (data: Trend) => void;
+  startYear: number;
+  endYear: number;
+}) => {
   const [label, setLabel] = useState('');
   const [trendStartYear, setTrendStartYear] = useState(startYear);
   const [trendEndYear, setTrendEndYear] = useState(endYear);
@@ -1114,7 +1164,12 @@ const TrendModal = ({ onClose, onSave, startYear, endYear }) => {
   );
 };
 
-const ConnectionModal = ({ onClose, onSave, from, to }) => {
+const ConnectionModal = ({ onClose, onSave, from, to }: {
+  onClose: () => void;
+  onSave: (data: Connection) => void;
+  from: number;
+  to: number;
+}) => {
   const [color, setColor] = useState('#666666');
   const [lineStyle, setLineStyle] = useState('solid');
   const [width, setWidth] = useState(2);
