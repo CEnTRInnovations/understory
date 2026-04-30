@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Understory: The Living Timeline
+
+**A multi-layer temporal canvas for mapping how factors across different domains have unfolded and intersected over time.**
+
+![Understory logo — a moss-covered fallen log with ferns and bracket fungi, suggesting layered ecological history](log-color.png)
+
+**[→ Open the app](https://centrinnovations.github.io/understory/)**
+
+---
+
+Understory is an open-source browser-based tool built on Peter Taylor's concept of *unruly complexity* — the idea that the conditions shaping any phenomenon are distributed across domains, unfold at different rates, and rarely reduce to a single cause or timeline.
+
+Where conventional timelines flatten history into a single thread, Understory lets you build **layered, connected, annotated temporal maps** — showing not just what happened, but in which domain, at what rate, and in relationship to what else.
+
+---
+
+## What It's For
+
+Understory is designed for researchers, educators, and practitioners who need to:
+
+- Map how policy, community, institutional, and cultural factors have **co-evolved** over time
+- Surface relationships and intersections that single-domain narratives obscure
+- Build a shared temporal structure before analysis begins — as a **facilitation and sense-making tool**
+- Document the historical context of a partnership, program, or field
+
+It is particularly useful in community-engaged research contexts where the history of a place, relationship, or initiative spans multiple systems with different rhythms and logics.
+
+---
+
+## Features
+
+- **Multiple layers** — define named rows for different domains (policy, community, institutional, technological, etc.)
+- **Freeform event placement** — click anywhere on the canvas to place and label an event
+- **Event connections** — draw curved, directional links between events across layers with custom line styles and colors
+- **Column annotations** — shade and label periods or phases across the full canvas
+- **Trend bands** — add horizontal markers spanning a time range to show sustained conditions or pressures
+- **Drag to reposition** — move events freely after placement
+- **Export** — save your timeline as JSON (to reload later), PNG, or PDF
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Try it locally
 
 ```bash
+git clone https://github.com/CEnTRInnovations/understory.git
+cd understory
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:5173/understory/](http://localhost:5173/understory/) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build for production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+```
 
-## Learn More
+Output goes to `dist/`. The project is configured for deployment to GitHub Pages via GitHub Actions — any push to `main` triggers a build and deploys automatically.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## The Name
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+In forest ecology, the *understory* is the layer of vegetation that grows beneath the forest canopy — often overlooked, but essential to the health and complexity of the ecosystem. It is where many of the most intricate relationships between species play out, away from the dominant view.
 
-## Deploy on Vercel
+The name reflects what this tool is designed to surface: the layers of context, condition, and history that shape phenomena from below — the parts of a story that don't make it into the headline timeline but without which the headline makes no sense.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Conceptual Grounding
+
+Understory is grounded in Peter Taylor's framework of *unruly complexity*, which holds that social and ecological phenomena are shaped by heterogeneous conditions distributed unevenly across scales, domains, and time. Taylor's method of *intersecting processes mapping* asks researchers to identify the strands that have come together to produce a situation — and to trace each strand back through its own history.
+
+Understory provides a visual workspace for that kind of mapping, making the multi-strand structure legible without forcing premature synthesis.
+
+---
+
+## Part of the CEnTR Ecosystem
+
+Understory is one of several open tools developed by [CEnTRInnovations](https://centrinnovations.github.io) to support community-engaged scholarship:
+
+| Tool | Purpose |
+|------|---------|
+| **[Apiary](https://centrinnovations.github.io/hexagons/)** | Hexagonal sensemaking canvas for concept clustering |
+| **[Understory](https://centrinnovations.github.io/understory/)** | Multi-layer temporal canvas for complexity mapping |
+| **CEnTR\*SEEK** | Identifies community-engaged work across institutional text |
+| **CEnTR\*MAP** | Asset-based documentation of community partnerships |
+| **CEnTR\*IMPACT** | Scholarly credit and cascade impact profiling |
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+*Developed by [CEnTRInnovations](https://centrinnovations.github.io).*
