@@ -1,0 +1,548 @@
+/* =============================================
+   Understory — CEnTRInnovations design system
+   Alegreya · warm parchment palette · SC labels
+============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;1,400&family=Alegreya+Sans:wght@300;400;500&family=Alegreya+Sans+SC:wght@400;500&display=swap');
+
+/* ── CSS VARIABLES ── */
+:root {
+  --bg-main:   #F6F2E7;
+  --bg-light:  #F0EAD8;
+  --bg-warm:   #EAE0CA;
+  --bg-mid:    #E2D4B8;
+  --bg-deep:   #D8C9A8;
+
+  --text:       #3E3B35;
+  --text-muted: #6b6760;
+  --text-light: #8A867E;
+  --primary:    #3F5E78;
+  --secondary:  #3B6B35;
+
+  --challenge-color: #8C6E45;
+  --system-color:    #3B6B35;
+  --outcomes-color:  #3F5E78;
+  --serve-color:     #7A4A62;
+  --tools-color:     #5A7A46;
+
+  --btn-layer:  #3F5E78;
+  --btn-event:  #3B6B35;
+  --btn-column: #7A4A62;
+  --btn-trend:  #8C6E45;
+  --btn-export: #5A4A35;
+
+  --border:  rgba(0,0,0,0.10);
+  --shadow:  0 2px 12px rgba(62,59,53,0.10), 0 1px 3px rgba(62,59,53,0.07);
+}
+
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg-main);
+  line-height: 1.6;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3 {
+  font-family: "Alegreya", serif;
+  font-weight: 400;
+}
+
+/* ── NAV ── */
+.u-nav {
+  background: var(--bg-mid);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 100;
+}
+.u-nav-inner {
+  padding: 0 1.25rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.u-nav-logo {
+  height: 44px;
+  width: auto;
+  display: block;
+}
+.u-nav-pipe {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.u-nav-label {
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.10em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.u-nav-label--dim {
+  color: var(--text-light);
+  font-weight: 300;
+}
+.u-nav-spacer { flex: 1; }
+.u-nav-brand {
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.u-nav-brand span { color: var(--challenge-color); }
+
+/* ── TOOLBAR ── */
+.u-toolbar {
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 1.25rem;
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
+}
+.u-toolbar-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 0.2rem;
+}
+
+/* ── BUTTONS ── */
+.u-btn {
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 3px;
+  padding: 0.38rem 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  color: #fff;
+  line-height: 1;
+}
+.u-btn:hover   { opacity: 0.84; }
+.u-btn:active  { transform: translateY(1px); }
+.u-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.u-btn--layer   { background: var(--btn-layer); }
+.u-btn--event   { background: var(--btn-event); }
+.u-btn--column  { background: var(--btn-column); }
+.u-btn--trend   { background: var(--btn-trend); }
+.u-btn--export  { background: var(--btn-export); }
+.u-btn--primary { background: var(--primary); }
+.u-btn--danger  { background: #9B3A3A; }
+.u-btn--ghost   {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.u-btn--ghost:hover { background: var(--bg-warm); }
+.u-btn--full { width: 100%; justify-content: center; }
+
+/* ── YEAR CONTROLS ── */
+.u-year-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+.u-year-label {
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.u-year-input {
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.85rem;
+  width: 68px;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-main);
+  color: var(--text);
+  text-align: center;
+}
+.u-year-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* ── EXPORT DROPDOWN ── */
+.u-export-wrap { position: relative; }
+.u-export-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  min-width: 160px;
+  z-index: 200;
+  overflow: hidden;
+}
+.u-export-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.u-export-menu button:hover { background: var(--bg-warm); }
+
+/* ── CONNECTING HINT ── */
+.u-connecting-hint {
+  background: var(--bg-warm);
+  border: 1px solid var(--challenge-color);
+  border-radius: 3px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--challenge-color);
+  font-family: "Alegreya Sans", sans-serif;
+}
+
+/* ── CANVAS ── */
+.u-canvas-area {
+  flex: 1;
+  overflow: auto;
+  padding: 1.5rem;
+  background: var(--bg-warm);
+}
+.u-timeline-wrap {
+  position: relative;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  min-width: 1200px;
+  user-select: none;
+}
+
+/* ── EMPTY STATE ── */
+.u-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  text-align: center;
+  gap: 0.75rem;
+}
+.u-empty h2 {
+  font-family: "Alegreya", serif;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+}
+.u-empty-stripe {
+  width: 36px;
+  height: 3px;
+  background: var(--challenge-color);
+  border-radius: 2px;
+}
+.u-empty p {
+  font-size: 0.88rem;
+  color: var(--text-light);
+  max-width: 360px;
+}
+
+/* ── COLUMN ANNOTATIONS ── */
+.u-col-annotation {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(62,59,53,0.035);
+  border-left: 1px solid rgba(62,59,53,0.12);
+  border-right: 1px solid rgba(62,59,53,0.12);
+  pointer-events: none;
+}
+.u-col-label {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: var(--bg-main);
+  padding: 1px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+/* ── LAYER ROWS ── */
+.u-layer-row {
+  position: absolute;
+  left: 0; right: 0;
+  border-bottom: 1px solid rgba(62,59,53,0.12);
+}
+.u-layer-label {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.5rem;
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.u-layer-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--serve-color);
+  opacity: 0.45;
+  line-height: 1;
+  padding: 1px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+.u-layer-remove:hover { opacity: 1; }
+
+/* ── YEAR AXIS ── */
+.u-year-axis {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 48px;
+  border-top: 1px solid rgba(62,59,53,0.20);
+  background: var(--bg-light);
+}
+.u-year-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.u-year-tick-mark {
+  width: 1px;
+  height: 8px;
+  background: var(--text-light);
+}
+.u-year-tick-label {
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ── TREND BANDS ── */
+.u-trend-band {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.7rem;
+  color: #fff;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* ── EVENT NODES ── */
+.u-event-node {
+  position: absolute;
+  transform: translateX(-50%);
+  cursor: move;
+  max-width: 130px;
+}
+.u-event-card {
+  padding: 0.32rem 0.55rem;
+  border-radius: 3px;
+  border-width: 2px;
+  border-style: solid;
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.75rem;
+  text-align: center;
+  line-height: 1.35;
+  box-shadow: 0 1px 4px rgba(62,59,53,0.12);
+  word-break: break-word;
+}
+.u-event-card--italic { font-style: italic; }
+.u-event-node--selected .u-event-card {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.u-event-node--connecting .u-event-card {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
+
+/* ── EVENT ACTION POPUP ── */
+.u-event-actions {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  white-space: nowrap;
+  z-index: 10;
+}
+.u-event-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: 2px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.u-event-action-btn:hover { background: var(--bg-warm); color: var(--text); }
+.u-event-action-btn--danger:hover { background: #f0ddd9; color: #9B3A3A; }
+
+/* ── SVG OVERLAY ── */
+.u-svg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* ── MODAL ── */
+.u-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(62,59,53,0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+.u-modal {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 8px 40px rgba(62,59,53,0.18);
+  padding: 1.75rem;
+  max-width: 420px;
+  width: 100%;
+  margin: 1rem;
+}
+.u-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.u-modal-title {
+  font-family: "Alegreya", serif;
+  font-size: 1.2rem;
+  color: var(--text);
+}
+.u-modal-stripe {
+  width: 28px;
+  height: 2px;
+  background: var(--challenge-color);
+  border-radius: 2px;
+  margin-top: 0.4rem;
+}
+.u-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1rem;
+  padding: 2px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.u-modal-close:hover { color: var(--text); }
+
+/* ── FORM ELEMENTS ── */
+.u-form-group { margin-bottom: 0.85rem; }
+.u-form-row { display: flex; gap: 0.75rem; }
+.u-form-row > .u-form-group { flex: 1; }
+
+.u-form-label {
+  display: block;
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.67rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+.u-form-input,
+.u-form-select {
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-light);
+  color: var(--text);
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.88rem;
+}
+.u-form-input:focus,
+.u-form-select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.u-form-color {
+  width: 100%;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-light);
+  cursor: pointer;
+}
+.u-form-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.u-form-checkbox-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+}
+.u-form-checkbox-row label {
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+.u-form-range {
+  width: 100%;
+  accent-color: var(--primary);
+}

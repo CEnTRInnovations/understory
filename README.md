@@ -37,8 +37,6 @@ It is particularly useful in community-engaged research contexts where the histo
 - **Drag to reposition** — move events freely after placement
 - **Export** — save your timeline as JSON (to reload later), PNG, or PDF
 
----
-
 ## Getting Started
 
 ### Try it locally
@@ -52,31 +50,17 @@ npm run dev
 
 Then open [http://localhost:5173/understory/](http://localhost:5173/understory/) in your browser.
 
-### Build for production
-
-```bash
-npm run build
-```
-
-Output goes to `dist/`. The project is configured for deployment to GitHub Pages via GitHub Actions — any push to `main` triggers a build and deploys automatically.
-
----
-
 ## The Name
 
 In forest ecology, the *understory* is the layer of vegetation that grows beneath the forest canopy — often overlooked, but essential to the health and complexity of the ecosystem. It is where many of the most intricate relationships between species play out, away from the dominant view.
 
 The name reflects what this tool is designed to surface: the layers of context, condition, and history that shape phenomena from below — the parts of a story that don't make it into the headline timeline but without which the headline makes no sense.
 
----
-
 ## Conceptual Grounding
 
 Understory is grounded in Peter Taylor's framework of *unruly complexity*, which holds that social and ecological phenomena are shaped by heterogeneous conditions distributed unevenly across scales, domains, and time. Taylor's method of *intersecting processes mapping* asks researchers to identify the strands that have come together to produce a situation — and to trace each strand back through its own history.
 
 Understory provides a visual workspace for that kind of mapping, making the multi-strand structure legible without forcing premature synthesis.
-
----
 
 ## Part of the CEnTR Ecosystem
 
@@ -89,8 +73,6 @@ Understory is one of several open tools developed by [CEnTRInnovations](https://
 | **CEnTR\*SEEK** | Identifies community-engaged work across institutional text |
 | **CEnTR\*MAP** | Asset-based documentation of community partnerships |
 | **CEnTR\*IMPACT** | Scholarly credit and cascade impact profiling |
-
----
 
 ## License
 
