@@ -33,7 +33,7 @@ type Trend = {
   color: string;
 };
 
-const ComplexityTimeline = () => {
+const complexity_timeline = () => {
   const [layers, setLayers] = useState<string[]>([]);
   const [startYear, setStartYear] = useState(2008);
   const [endYear, setEndYear] = useState(2025);
@@ -1231,4 +1231,4 @@ const ConnectionModal = ({ onClose, onSave, from, to }: {
   );
 };
 
-export default ComplexityTimeline;
+export default complexity_timeline;
