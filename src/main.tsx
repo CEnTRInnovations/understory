@@ -4,6 +4,6 @@ import ComplexityTimeline from './complexity_timeline'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ComplexityTimeline />
+    <complexity_timeline />
   </React.StrictMode>
 )
