@@ -277,7 +277,7 @@ const ConnectionModal = ({
 };
 
 // ── Main Component ──
-const complexity_timeline = () => {
+const ComplexityTimeline = () => {
   const [layers, setLayers]           = useState<string[]>([]);
   const [startYear, setStartYear]     = useState(2008);
   const [endYear, setEndYear]         = useState(2025);
@@ -754,4 +754,4 @@ const complexity_timeline = () => {
   );
 };
 
-export default complexity_timeline;
+export default ComplexityTimeline;

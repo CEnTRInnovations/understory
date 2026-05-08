@@ -1,9 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import complexity_timeline from './complexity_timeline'
+import ComplexityTimeline from './ComplexityTimeline'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <complexity_timeline />
+    <ComplexityTimeline />
   </React.StrictMode>
 )
