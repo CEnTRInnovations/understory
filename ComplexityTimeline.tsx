@@ -51,10 +51,10 @@ const ComplexityTimeline = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [editingEvent, setEditingEvent] = useState<number | null>(null);
   const [draggingLayer, setDraggingLayer] = useState<number | null>(null);
-  
-  const timelineRef = useRef(null);
-  const svgRef = useRef(null);
-  const exportRef = useRef(null);
+
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const yearSpan = endYear - startYear;
   const layerHeight = 120;
@@ -65,10 +65,10 @@ const ComplexityTimeline = () => {
     setShowLayerModal(false);
   };
 
-  const removeLayer = (index) => {
+  const removeLayer = (index: number) => {
     const newLayers = layers.filter((_, i) => i !== index);
     setLayers(newLayers);
-    setEvents(events.filter(e => e.layer !== index).map(e => 
+    setEvents(events.filter(e => e.layer !== index).map(e =>
       e.layer > index ? { ...e, layer: e.layer - 1 } : e
     ));
   };
@@ -83,7 +83,7 @@ const ComplexityTimeline = () => {
     setShowEventModal(false);
   };
 
-  const deleteEvent = (index) => {
+  const deleteEvent = (index: number) => {
     setEvents(events.filter((_, i) => i !== index));
     setConnections(connections.filter(c => c.from !== index && c.to !== index));
     setSelectedEvent(null);
@@ -133,7 +133,7 @@ const ComplexityTimeline = () => {
 
   const exportAsPNG = async () => {
     if (!timelineRef.current) return;
-    
+
     // Create a canvas
     const canvas = document.createElement('canvas');
     const rect = timelineRef.current.getBoundingClientRect();
@@ -142,11 +142,11 @@ const ComplexityTimeline = () => {
     canvas.height = rect.height * scale;
     const ctx = canvas.getContext('2d')!;
     ctx.scale(scale, scale);
-    
+
     // Fill background
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, rect.width, rect.height);
-    
+
     // Draw columns
     columns.forEach(col => {
       const x = (yearToX(col.startYear) / 100) * rect.width;
@@ -155,13 +155,13 @@ const ComplexityTimeline = () => {
       ctx.fillRect(x, 0, width, rect.height);
       ctx.strokeStyle = 'rgba(209, 213, 219, 1)';
       ctx.strokeRect(x, 0, width, rect.height);
-      
+
       ctx.fillStyle = '#374151';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(col.label, x + width / 2, 15);
     });
-    
+
     // Draw layers
     layers.forEach((layer, i) => {
       const y = i * layerHeight;
@@ -170,33 +170,33 @@ const ComplexityTimeline = () => {
       ctx.moveTo(0, y);
       ctx.lineTo(rect.width, y);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#374151';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(layer, 8, y + 15, 140);
     });
-    
+
     // Draw connections
     connections.forEach(conn => {
       const from = getEventPosition(conn.from);
       const to = getEventPosition(conn.to);
-      
+
       const fromSide = from.x < to.x ? 'right' : 'left';
       const toSide = from.x < to.x ? 'left' : 'right';
-      
+
       const eventWidth = 60;
       const fromX = fromSide === 'right' ? from.x + eventWidth : from.x - eventWidth;
       const toX = toSide === 'left' ? to.x - eventWidth : to.x + eventWidth;
       const fromY = from.y;
       const toY = to.y;
-      
+
       const dx = toX - fromX;
       const cx1 = fromX + dx * 0.5;
       const cy1 = fromY;
       const cx2 = fromX + dx * 0.5;
       const cy2 = toY;
-      
+
       ctx.strokeStyle = conn.color || '#666';
       ctx.lineWidth = conn.width || 2;
       if (conn.lineStyle === 'dashed') {
@@ -206,12 +206,12 @@ const ComplexityTimeline = () => {
       } else {
         ctx.setLineDash([]);
       }
-      
+
       ctx.beginPath();
       ctx.moveTo(fromX, fromY);
       ctx.bezierCurveTo(cx1, cy1, cx2, cy2, toX, toY);
       ctx.stroke();
-      
+
       // Draw arrowhead
       if (conn.showArrow) {
         const angle = Math.atan2(toY - cy2, toX - cx2);
@@ -224,12 +224,12 @@ const ComplexityTimeline = () => {
         ctx.fill();
       }
     });
-    
+
     // Draw events
     events.forEach(event => {
       const x = (event.x / 100) * rect.width;
       const y = event.layer * layerHeight + 20;
-      
+
       ctx.fillStyle = event.color || '#fff';
       ctx.strokeStyle = event.borderColor || '#333';
       ctx.lineWidth = 2;
@@ -237,7 +237,7 @@ const ComplexityTimeline = () => {
       const boxHeight = 40;
       ctx.fillRect(x - boxWidth / 2, y, boxWidth, boxHeight);
       ctx.strokeRect(x - boxWidth / 2, y, boxWidth, boxHeight);
-      
+
       ctx.fillStyle = '#000';
       ctx.font = event.style === 'italic' ? 'italic 10px sans-serif' : '10px sans-serif';
       ctx.textAlign = 'center';
@@ -257,7 +257,7 @@ const ComplexityTimeline = () => {
       });
       ctx.fillText(line, x, lineY);
     });
-    
+
     // Draw year markers
     const markerY = rect.height - 48;
     ctx.strokeStyle = '#9ca3af';
@@ -265,7 +265,7 @@ const ComplexityTimeline = () => {
     ctx.moveTo(0, markerY);
     ctx.lineTo(rect.width, markerY);
     ctx.stroke();
-    
+
     for (let i = 0; i <= Math.ceil(yearSpan / 5); i++) {
       const year = startYear + i * 5;
       if (year > endYear) break;
@@ -275,30 +275,30 @@ const ComplexityTimeline = () => {
       ctx.moveTo(x, markerY);
       ctx.lineTo(x, markerY + 8);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#4b5563';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(year.toString(), x, markerY + 20);
     }
-    
+
     // Draw trends
     trends.forEach((trend, i) => {
       const x = (yearToX(trend.startYear) / 100) * rect.width;
       const width = ((yearToX(trend.endYear) - yearToX(trend.startYear)) / 100) * rect.width;
       const y = rect.height - 64 - (i * 8);
-      
+
       ctx.fillStyle = trend.color || '#666666';
       ctx.globalAlpha = 0.8;
       ctx.fillRect(x, y, width, 24);
       ctx.globalAlpha = 1;
-      
+
       ctx.fillStyle = '#fff';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(trend.label, x + width / 2, y + 15);
     });
-    
+
     // Convert to PNG
     canvas.toBlob(blob => {
       if (!blob) return;
@@ -314,7 +314,7 @@ const ComplexityTimeline = () => {
   const exportAsPDF = async () => {
     // First create PNG
     if (!timelineRef.current) return;
-    
+
     const canvas = document.createElement('canvas');
     const rect = timelineRef.current.getBoundingClientRect();
     const scale = 2;
@@ -322,11 +322,11 @@ const ComplexityTimeline = () => {
     canvas.height = rect.height * scale;
     const ctx = canvas.getContext('2d')!;
     ctx.scale(scale, scale);
-    
+
     // Fill background
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, rect.width, rect.height);
-    
+
     // Draw columns
     columns.forEach(col => {
       const x = (yearToX(col.startYear) / 100) * rect.width;
@@ -335,13 +335,13 @@ const ComplexityTimeline = () => {
       ctx.fillRect(x, 0, width, rect.height);
       ctx.strokeStyle = 'rgba(209, 213, 219, 1)';
       ctx.strokeRect(x, 0, width, rect.height);
-      
+
       ctx.fillStyle = '#374151';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(col.label, x + width / 2, 15);
     });
-    
+
     // Draw layers
     layers.forEach((layer, i) => {
       const y = i * layerHeight;
@@ -350,33 +350,33 @@ const ComplexityTimeline = () => {
       ctx.moveTo(0, y);
       ctx.lineTo(rect.width, y);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#374151';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(layer, 8, y + 15, 140);
     });
-    
+
     // Draw connections
     connections.forEach(conn => {
       const from = getEventPosition(conn.from);
       const to = getEventPosition(conn.to);
-      
+
       const fromSide = from.x < to.x ? 'right' : 'left';
       const toSide = from.x < to.x ? 'left' : 'right';
-      
+
       const eventWidth = 60;
       const fromX = fromSide === 'right' ? from.x + eventWidth : from.x - eventWidth;
       const toX = toSide === 'left' ? to.x - eventWidth : to.x + eventWidth;
       const fromY = from.y;
       const toY = to.y;
-      
+
       const dx = toX - fromX;
       const cx1 = fromX + dx * 0.5;
       const cy1 = fromY;
       const cx2 = fromX + dx * 0.5;
       const cy2 = toY;
-      
+
       ctx.strokeStyle = conn.color || '#666';
       ctx.lineWidth = conn.width || 2;
       if (conn.lineStyle === 'dashed') {
@@ -386,12 +386,12 @@ const ComplexityTimeline = () => {
       } else {
         ctx.setLineDash([]);
       }
-      
+
       ctx.beginPath();
       ctx.moveTo(fromX, fromY);
       ctx.bezierCurveTo(cx1, cy1, cx2, cy2, toX, toY);
       ctx.stroke();
-      
+
       if (conn.showArrow) {
         const angle = Math.atan2(toY - cy2, toX - cx2);
         ctx.fillStyle = conn.color || '#666';
@@ -403,12 +403,12 @@ const ComplexityTimeline = () => {
         ctx.fill();
       }
     });
-    
+
     // Draw events
     events.forEach(event => {
       const x = (event.x / 100) * rect.width;
       const y = event.layer * layerHeight + 20;
-      
+
       ctx.fillStyle = event.color || '#fff';
       ctx.strokeStyle = event.borderColor || '#333';
       ctx.lineWidth = 2;
@@ -416,7 +416,7 @@ const ComplexityTimeline = () => {
       const boxHeight = 40;
       ctx.fillRect(x - boxWidth / 2, y, boxWidth, boxHeight);
       ctx.strokeRect(x - boxWidth / 2, y, boxWidth, boxHeight);
-      
+
       ctx.fillStyle = '#000';
       ctx.font = event.style === 'italic' ? 'italic 10px sans-serif' : '10px sans-serif';
       ctx.textAlign = 'center';
@@ -436,7 +436,7 @@ const ComplexityTimeline = () => {
       });
       ctx.fillText(line, x, lineY);
     });
-    
+
     // Draw year markers
     const markerY = rect.height - 48;
     ctx.strokeStyle = '#9ca3af';
@@ -444,7 +444,7 @@ const ComplexityTimeline = () => {
     ctx.moveTo(0, markerY);
     ctx.lineTo(rect.width, markerY);
     ctx.stroke();
-    
+
     for (let i = 0; i <= Math.ceil(yearSpan / 5); i++) {
       const year = startYear + i * 5;
       if (year > endYear) break;
@@ -454,33 +454,33 @@ const ComplexityTimeline = () => {
       ctx.moveTo(x, markerY);
       ctx.lineTo(x, markerY + 8);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#4b5563';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(year.toString(), x, markerY + 20);
     }
-    
+
     // Draw trends
     trends.forEach((trend, i) => {
       const x = (yearToX(trend.startYear) / 100) * rect.width;
       const width = ((yearToX(trend.endYear) - yearToX(trend.startYear)) / 100) * rect.width;
       const y = rect.height - 64 - (i * 8);
-      
+
       ctx.fillStyle = trend.color || '#666666';
       ctx.globalAlpha = 0.8;
       ctx.fillRect(x, y, width, 24);
       ctx.globalAlpha = 1;
-      
+
       ctx.fillStyle = '#fff';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(trend.label, x + width / 2, y + 15);
     });
-    
+
     // Convert canvas to PDF using jsPDF via CDN
     const imgData = canvas.toDataURL('image/png');
-    
+
     // Create PDF with jsPDF
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
@@ -491,34 +491,34 @@ const ComplexityTimeline = () => {
         unit: 'px',
         format: [rect.width, rect.height]
       });
-      
+
       pdf.addImage(imgData, 'PNG', 0, 0, rect.width, rect.height);
       pdf.save('timeline.pdf');
     };
     document.head.appendChild(script);
   };
 
-  const yearToX = (year) => {
+  const yearToX = (year: number) => {
     return ((year - startYear) / yearSpan) * 100;
   };
 
-  const handleTimelineClick = (e) => {
-    if (showEventModal || e.target.closest('.event-item')) return;
-    
-    const rect = timelineRef.current.getBoundingClientRect();
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (showEventModal || (e.target as HTMLElement).closest('.event-item')) return;
+
+    const rect = timelineRef.current!.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = e.clientY - rect.top;
-    
+
     const layer = Math.floor(y / layerHeight);
     if (layer >= layers.length) return;
-    
+
     const year = startYear + (x / 100) * yearSpan;
-    
+
     setEditingEvent(null);
     setShowEventModal({ x, year: Math.round(year), layer });
   };
 
-  const handleEventClick = (e, index) => {
+  const handleEventClick = (e: React.MouseEvent<HTMLDivElement>, index: number) => {
     e.stopPropagation();
     if (connectingFrom !== null) {
       if (connectingFrom !== index) {
@@ -531,50 +531,48 @@ const ComplexityTimeline = () => {
     }
   };
 
-  const handleEventDragStart = (e, index) => {
+  const handleEventDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     setDraggingEvent(index);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleEventDragOver = (e) => {
+  const handleEventDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   };
 
-  const handleEventDrop = (e) => {
+  const handleEventDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (draggingEvent === null) return;
 
-    const rect = timelineRef.current.getBoundingClientRect();
+    const rect = timelineRef.current!.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = e.clientY - rect.top;
     const layer = Math.floor(y / layerHeight);
-    
+
     if (layer >= layers.length || layer < 0) return;
-    
+
     const year = startYear + (x / 100) * yearSpan;
-    
-    setEvents(events.map((event, i) => 
-      i === draggingEvent 
+
+    setEvents(events.map((event, i) =>
+      i === draggingEvent
         ? { ...event, x, year: Math.round(year), layer }
         : event
     ));
     setDraggingEvent(null);
   };
 
-  const getEventPosition = (eventIndex) => {
+  const getEventPosition = (eventIndex: number) => {
     const event = events[eventIndex];
-    if (!event) return { x: 0, y: 0, side: 'right' };
+    if (!event) return { x: 0, y: 0 };
     const rect = timelineRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0, side: 'right' };
-    
+    if (!rect) return { x: 0, y: 0 };
+
     const centerX = (event.x / 100) * rect.width;
     const centerY = event.layer * layerHeight + 50;
-    
+
     return {
       x: centerX,
       y: centerY,
-      centerX,
-      centerY
     };
   };
 
@@ -595,7 +593,7 @@ const ComplexityTimeline = () => {
           <Plus size={16} /> Add Trend ({trends.length}/4)
         </button>
         <div className="relative ml-auto">
-          <button 
+          <button
             onClick={() => setShowExportMenu(!showExportMenu)}
             className="px-3 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 flex items-center gap-2"
           >
@@ -635,16 +633,16 @@ const ComplexityTimeline = () => {
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm">Start:</label>
-          <input 
-            type="number" 
-            value={startYear} 
+          <input
+            type="number"
+            value={startYear}
             onChange={(e) => setStartYear(Number(e.target.value))}
             className="w-20 px-2 py-1 border rounded"
           />
           <label className="text-sm">End:</label>
-          <input 
-            type="number" 
-            value={endYear} 
+          <input
+            type="number"
+            value={endYear}
             onChange={(e) => setEndYear(Number(e.target.value))}
             className="w-20 px-2 py-1 border rounded"
           />
@@ -653,7 +651,7 @@ const ComplexityTimeline = () => {
 
       {/* Timeline */}
       <div className="flex-1 overflow-auto p-8">
-        <div 
+        <div
           ref={timelineRef}
           className="relative bg-white border rounded shadow-lg"
           style={{ height: timelineHeight, minWidth: '1200px' }}
@@ -662,7 +660,7 @@ const ComplexityTimeline = () => {
           onDrop={handleEventDrop}
         >
           {/* SVG for connections */}
-          <svg 
+          <svg
             ref={svgRef}
             className="absolute inset-0 pointer-events-none"
             style={{ width: '100%', height: '100%' }}
@@ -685,27 +683,27 @@ const ComplexityTimeline = () => {
             {connections.map((conn, i) => {
               const from = getEventPosition(conn.from);
               const to = getEventPosition(conn.to);
-              
+
               // Determine which side each event should connect from
               const fromSide = from.x < to.x ? 'right' : 'left';
               const toSide = from.x < to.x ? 'left' : 'right';
-              
+
               // Calculate connection points on the sides of events
               const eventWidth = 60; // half the approximate event width
               const fromX = fromSide === 'right' ? from.x + eventWidth : from.x - eventWidth;
               const toX = toSide === 'left' ? to.x - eventWidth : to.x + eventWidth;
               const fromY = from.y;
               const toY = to.y;
-              
+
               // Calculate control points for S-curve
               const dx = toX - fromX;
               const cx1 = fromX + dx * 0.5;
               const cy1 = fromY;
               const cx2 = fromX + dx * 0.5;
               const cy2 = toY;
-              
+
               const path = `M ${fromX} ${fromY} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${toX} ${toY}`;
-              
+
               return (
                 <path
                   key={i}
@@ -713,7 +711,7 @@ const ComplexityTimeline = () => {
                   stroke={conn.color || '#666'}
                   strokeWidth={conn.width || 2}
                   strokeDasharray={
-                    conn.lineStyle === 'dashed' ? '5,5' : 
+                    conn.lineStyle === 'dashed' ? '5,5' :
                     conn.lineStyle === 'dotted' ? '2,3' : '0'
                   }
                   fill="none"
@@ -804,7 +802,7 @@ const ComplexityTimeline = () => {
               <div className={`px-3 py-2 rounded shadow-md text-xs text-center border-2 ${
                 event.style === 'italic' ? 'italic' : ''
               }`}
-              style={{ 
+              style={{
                 backgroundColor: event.color || '#fff',
                 borderColor: event.borderColor || '#333'
               }}>
