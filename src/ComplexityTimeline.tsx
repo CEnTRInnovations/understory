@@ -1761,11 +1761,27 @@ const ComplexityTimeline = () => {
               {/* Connection action popups, positioned at the curve midpoint */}
               {connections.map((conn, i) => {
                 if (selectedConnection !== i) return null;
-                const from = getEventPos(conn.from);
-                const to   = getEventPos(conn.to);
-                const { x1, y1, c1x, c1y, c2x, c2y, x2, y2 } =
-                  getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
-                const { x: midX, y: midY } = bezierMidpoint(x1, y1, c1x, c1y, c2x, c2y, x2, y2);
+                let midX: number, midY: number;
+                if (displayMode === 'strands') {
+                  const svgW = svgRef.current?.getBoundingClientRect().width ?? canvasWidth;
+                  const geom = computeStrandConnectorGeometry(
+                    events[conn.from], events[conn.to], svgW, layerHeight
+                  );
+                  // midpoint of bezier at t=0.5
+                  if (geom.kind === 'quad') {
+                    midX = (geom.x1 + 2 * geom.cx + geom.x2) / 4;
+                    midY = (geom.y1 + 2 * geom.cy + geom.y2) / 4;
+                  } else {
+                    midX = (geom.x1 + 3 * geom.cx1 + 3 * geom.cx2 + geom.x2) / 8;
+                    midY = (geom.y1 + 3 * geom.cy1 + 3 * geom.cy2 + geom.y2) / 8;
+                  }
+                } else {
+                  const from = getEventPos(conn.from);
+                  const to   = getEventPos(conn.to);
+                  const { x1, y1, c1x, c1y, c2x, c2y, x2, y2 } =
+                    getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+                  ({ x: midX, y: midY } = bezierMidpoint(x1, y1, c1x, c1y, c2x, c2y, x2, y2));
+                }
                 return (
                   <div key={i} className="u-connection-actions" style={{ left: midX, top: midY }}>
                     <button className="u-event-action-btn" title="Edit connection"
