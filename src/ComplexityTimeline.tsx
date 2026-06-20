@@ -1106,6 +1106,24 @@ const ComplexityTimeline = () => {
       ctx.beginPath(); ctx.moveTo(x + 1, rect.height); ctx.lineTo(x + 5, 0); ctx.stroke();
     });
 
+    trends.forEach((trend, i) => {
+      const x = (yearToPct(trend.startYear) / 100) * rect.width;
+      const w = (yearToPct(trend.endYear)   / 100) * rect.width - x;
+      const h = 20;
+      const y = rect.height - (48 + i * 22) - h;
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = trend.color;
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+      ctx.fillStyle = '#fff';
+      ctx.font = '11px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(trend.label, x + w / 2, y + h / 2);
+      ctx.textBaseline = 'alphabetic';
+    });
+
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, rect.width);
       const y = ev.layer * layerHeight + ev.yOffset;
