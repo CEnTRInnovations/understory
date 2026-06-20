@@ -271,6 +271,74 @@ function clampYOffset(y: number, layerHeight: number) {
   return Math.min(layerHeight - EVENT_BOTTOM_MARGIN, Math.max(EVENT_TOP_MARGIN, y));
 }
 
+const STRAND_LABEL_STEP = 20;  // px per stagger step above or below the strand
+const STRAND_LABEL_BASE = 16;  // px from strand center to first label
+
+type StrandLabelPos = {
+  eventIndex: number;
+  side: 'above' | 'below';
+  yExtra: number; // additional stagger in px (0 = no collision)
+};
+
+function computeStrandLabels(
+  layerEvents: { e: TimelineEvent; globalIdx: number }[],
+): StrandLabelPos[] {
+  // Sort by x position within this layer
+  const sorted = [...layerEvents].sort((a, b) => a.e.x - b.e.x);
+  const positions: StrandLabelPos[] = sorted.map(({ globalIdx }, idx) => ({
+    eventIndex: globalIdx,
+    side: idx % 2 === 0 ? 'above' : 'below',
+    yExtra: 0,
+  }));
+
+  // Greedy collision pass: if adjacent same-side labels are within 90px
+  // horizontally, stagger the later one by one more step.
+  const lastRight: { above: number; below: number } = { above: -Infinity, below: -Infinity };
+  positions.forEach((pos, i) => {
+    const xPct = sorted[i].e.x;
+    if (lastRight[pos.side] !== -Infinity && xPct - lastRight[pos.side] < 90) {
+      pos.yExtra += STRAND_LABEL_STEP;
+    }
+    lastRight[pos.side] = xPct + 90;
+  });
+
+  return positions;
+}
+
+type StrandConnGeom =
+  | { kind: 'cubic'; x1: number; y1: number; cx1: number; cy1: number; cx2: number; cy2: number; x2: number; y2: number }
+  | { kind: 'quad';  x1: number; y1: number; cx: number;  cy: number;  x2: number; y2: number };
+
+function computeStrandConnectorGeometry(
+  fromEv: TimelineEvent,
+  toEv: TimelineEvent,
+  w: number,
+  lh: number,
+  fromOffset = 0,
+  toOffset = 0,
+): StrandConnGeom {
+  const x1 = eventLeftPx(fromEv.x, w) + fromOffset;
+  const x2 = eventLeftPx(toEv.x, w)   + toOffset;
+  const y1 = fromEv.layer * lh + lh / 2;
+  const y2 = toEv.layer   * lh + lh / 2;
+  if (fromEv.layer === toEv.layer) {
+    // Same strand: small arc above the line so lateral connections are legible
+    const cx = (x1 + x2) / 2;
+    const cy = y1 - Math.min(lh * 0.25, Math.abs(x2 - x1) * 0.12);
+    return { kind: 'quad', x1, y1, cx, cy, x2, y2 };
+  }
+  // Cross-strand: control points are (x1,midY) and (x2,midY) — all connectors in
+  // the same region share this rule, so they form parallel arcs instead of
+  // independent crossing diagonals (§1.3a curvature discipline).
+  const midY = (y1 + y2) / 2;
+  return { kind: 'cubic', x1, y1, cx1: x1, cy1: midY, cx2: x2, cy2: midY, x2, y2 };
+}
+
+function strandGeomToSVGPath(g: StrandConnGeom): string {
+  if (g.kind === 'quad') return `M ${g.x1} ${g.y1} Q ${g.cx} ${g.cy} ${g.x2} ${g.y2}`;
+  return `M ${g.x1} ${g.y1} C ${g.cx1} ${g.cy1}, ${g.cx2} ${g.cy2}, ${g.x2} ${g.y2}`;
+}
+
 // ── Sub-components ──
 
 const Modal = ({
@@ -1404,30 +1472,84 @@ const ComplexityTimeline = () => {
                       </marker>
                     );
                   })}
+                  {/* strand arrowhead marker */}
+                  {displayMode === 'strands' && (
+                    <marker id="strand-arrow" markerWidth="8" markerHeight="6"
+                      refX="7" refY="3" orient="auto">
+                      <polygon points="0 0, 8 3, 0 6" fill="#3E3B35" fillOpacity="0.5" />
+                    </marker>
+                  )}
                 </defs>
-                {connections.map((conn, i) => {
-                  const from = getEventPos(conn.from);
-                  const to   = getEventPos(conn.to);
-                  const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } =
-                    getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
-                  const path = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+
+                {/* Strand lines — one per layer, rendered in strands mode */}
+                {displayMode === 'strands' && layers.map((_lyr, i) => {
+                  const y = i * layerHeight + layerHeight / 2;
+                  const color = '#3E3B35';
                   return (
-                    <g key={i}>
-                      <path d={path}
-                        stroke={conn.color} strokeWidth={conn.width} fill="none"
-                        strokeDasharray={conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined}
-                        markerEnd={conn.showArrow ? `url(#arrow-${i})` : undefined}
-                      />
-                      {/* Invisible wide hit area — the SVG overlay has
-                          pointer-events: none, so we re-enable it just on
-                          this path to make the thin visible line clickable. */}
-                      <path d={path} stroke="transparent" strokeWidth={Math.max(16, conn.width + 14)} fill="none"
-                        style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
-                        onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
-                        onDoubleClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }} />
-                    </g>
+                    <line key={`strand-${i}`}
+                      x1={0} y1={y} x2="100%" y2={y}
+                      stroke={color} strokeWidth={1.5} strokeOpacity={0.45}
+                      markerEnd="url(#strand-arrow)"
+                    />
                   );
                 })}
+
+                {/* Connections */}
+                {(() => {
+                  // Pre-compute per-event connector lists so we can spread anchors apart when
+                  // multiple connections land on the same event point (§1.3a item 3).
+                  const connAtEvent = new Map<number, number[]>();
+                  if (displayMode === 'strands') {
+                    connections.forEach((conn, ci) => {
+                      if (!connAtEvent.has(conn.from)) connAtEvent.set(conn.from, []);
+                      if (!connAtEvent.has(conn.to))   connAtEvent.set(conn.to,   []);
+                      connAtEvent.get(conn.from)!.push(ci);
+                      connAtEvent.get(conn.to)!.push(ci);
+                    });
+                  }
+                  const svgW = svgRef.current?.getBoundingClientRect().width ?? canvasWidth;
+
+                  return connections.map((conn, i) => {
+                    let path: string;
+                    if (displayMode === 'strands') {
+                      const fromConns  = connAtEvent.get(conn.from) ?? [];
+                      const toConns    = connAtEvent.get(conn.to)   ?? [];
+                      const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
+                      const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
+                      path = strandGeomToSVGPath(
+                        computeStrandConnectorGeometry(events[conn.from], events[conn.to], svgW, layerHeight, fromOffset, toOffset)
+                      );
+                    } else {
+                      const from = getEventPos(conn.from);
+                      const to   = getEventPos(conn.to);
+                      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+                      path = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+                    }
+                    // Hover/select isolation (§1.3a item 4): dim non-connected curves to 10% when
+                    // an event is selected, so the active event's connections read clearly.
+                    const isActive = displayMode !== 'strands' || selectedEvent === null ||
+                                     conn.from === selectedEvent || conn.to === selectedEvent;
+                    return (
+                      <g key={i}>
+                        <path d={path}
+                          stroke={displayMode === 'strands' ? '#9E9B96' : conn.color}
+                          strokeWidth={displayMode === 'strands' ? 1 : conn.width}
+                          strokeOpacity={displayMode === 'strands' ? (isActive ? 0.35 : 0.1) : 1}
+                          fill="none"
+                          strokeDasharray={displayMode === 'strands' ? '2 4' : (conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined)}
+                          markerEnd={displayMode === 'strands' ? undefined : (conn.showArrow ? `url(#arrow-${i})` : undefined)}
+                        />
+                        {/* Invisible wide hit area — the SVG overlay has
+                            pointer-events: none, so we re-enable it just on
+                            this path to make the thin visible line clickable. */}
+                        <path d={path} stroke="transparent" strokeWidth={Math.max(16, conn.width + 14)} fill="none"
+                          style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                          onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
+                          onDoubleClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }} />
+                      </g>
+                    );
+                  });
+                })()}
               </svg>
 
               {/* Connection action popups, positioned at the curve midpoint */}
@@ -1501,7 +1623,7 @@ const ComplexityTimeline = () => {
                     <div key={i} className="u-cut-mark" style={{ left: `${center}%` }}
                       onClick={e => { e.stopPropagation(); setSelectedCut(prev => prev === i ? null : i); }}
                       onDoubleClick={e => { e.stopPropagation(); setEditingCut(i); setShowCutModal(true); }}
-                      title={`${cut.startYear}–${cut.endYear} compressed`}>
+                      title={`No events recorded in ${cut.startYear}–${cut.endYear} — confirm this is the right historiographical claim before exporting`}>
                       <div className="u-cut-mark-line" />
                       <div className="u-cut-mark-line" />
                       {selectedCut === i && (
@@ -1522,7 +1644,7 @@ const ComplexityTimeline = () => {
               </div>
 
               {/* Trend bands */}
-              {trends.map((trend, i) => {
+              {displayMode === 'cards' && trends.map((trend, i) => {
                 const left  = yearToPct(trend.startYear);
                 const width = yearToPct(trend.endYear) - left;
                 return (
@@ -1550,63 +1672,167 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {/* Events */}
-              {events.map((event, i) => (
-                <div
-                  key={i}
-                  draggable
-                  className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
-                  style={{ left: eventLeft(event.x), top: `${event.layer * layerHeight + event.yOffset}px` }}
-                  onDragStart={e => handleDragStart(e, i)}
-                  onClick={e => handleEventClick(e, i)}
-                  onDoubleClick={e => {
-                    e.stopPropagation();
-                    if (connectingFrom !== null) return; // dbl-click shouldn't fight with connection picking
-                    setEditingEvent(i);
-                    setShowEventModal(event);
-                  }}
-                >
-                  <div
-                    ref={el => { cardRefs.current[i] = el; }}
-                    className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
-                    style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
-                  >
-                    {event.label}
-                  </div>
-                  {selectedEvent === i && (
-                    <div className="u-event-actions">
-                      <button className="u-event-action-btn" title="Connect to another event"
-                        onClick={e => { e.stopPropagation(); setConnectingFrom(i); setConnectFromSide(null); setSelectedEvent(null); }}>
-                        <Link2 size={13} />
-                      </button>
-                      <button className="u-event-action-btn" title="Edit event"
-                        onClick={e => { e.stopPropagation(); setEditingEvent(i); setShowEventModal(event); }}>
-                        <Edit2 size={13} />
-                      </button>
-                      <button className="u-event-action-btn u-event-action-btn--danger" title="Delete event"
-                        onClick={e => { e.stopPropagation(); deleteEvent(i); }}>
-                        <Trash2 size={13} />
-                      </button>
+              {displayMode === 'strands' && (() => {
+                const STRAND_BAR_HEIGHT = 14;
+                const STRAND_BAR_GUTTER = 4;
+                const sorted = [...trends].sort((a, b) => a.startYear - b.startYear);
+                return sorted.map((trend, i) => {
+                  const origIdx = trends.indexOf(trend);
+                  const left  = yearToPct(trend.startYear);
+                  const width = yearToPct(trend.endYear) - left;
+                  const bottom = 48 + i * (STRAND_BAR_HEIGHT + STRAND_BAR_GUTTER);
+                  return (
+                    <div key={origIdx} className="u-strand-trend-bar" style={{
+                      left: `${left}%`, width: `${width}%`,
+                      bottom: `${bottom}px`, height: STRAND_BAR_HEIGHT,
+                      background: trend.color,
+                    }}
+                      onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
+                      onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
+                      <span className="u-strand-trend-label">{trend.label}</span>
+                      {selectedTrend === origIdx && (
+                        <div className="u-trend-actions">
+                          <button className="u-event-action-btn" title="Edit trend"
+                            onClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
+                            <Edit2 size={13} />
+                          </button>
+                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
+                            onClick={e => { e.stopPropagation(); deleteTrend(origIdx); }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {/* Anchor dots — while connecting, click one to pin
-                      exactly where the line attaches on this card. On the
-                      active source card, the chosen side stays highlighted
-                      until a target is picked. */}
-                  {connectingFrom !== null && (
-                    <>
-                      {(['top', 'right', 'bottom', 'left'] as Side[]).map(side => (
-                        <div
-                          key={side}
-                          className={`u-anchor-dot u-anchor-dot--${side} ${connectingFrom === i && connectFromSide === side ? 'u-anchor-dot--active' : ''}`}
-                          title={connectingFrom === i ? `Start the line from here (${side})` : `End the line here (${side})`}
-                          onClick={e => handleAnchorClick(e, i, side)}
-                        />
-                      ))}
-                    </>
-                  )}
-                </div>
-              ))}
+                  );
+                });
+              })()}
+
+              {/* Events */}
+              {events.map((event, i) => {
+                if (displayMode === 'strands') return null; // handled below
+                return (
+                  <div
+                    key={i}
+                    draggable
+                    className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
+                    style={{ left: eventLeft(event.x), top: `${event.layer * layerHeight + event.yOffset}px` }}
+                    onDragStart={e => handleDragStart(e, i)}
+                    onClick={e => handleEventClick(e, i)}
+                    onDoubleClick={e => {
+                      e.stopPropagation();
+                      if (connectingFrom !== null) return; // dbl-click shouldn't fight with connection picking
+                      setEditingEvent(i);
+                      setShowEventModal(event);
+                    }}
+                  >
+                    <div
+                      ref={el => { cardRefs.current[i] = el; }}
+                      className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
+                      style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
+                    >
+                      {event.label}
+                    </div>
+                    {selectedEvent === i && (
+                      <div className="u-event-actions">
+                        <button className="u-event-action-btn" title="Connect to another event"
+                          onClick={e => { e.stopPropagation(); setConnectingFrom(i); setConnectFromSide(null); setSelectedEvent(null); }}>
+                          <Link2 size={13} />
+                        </button>
+                        <button className="u-event-action-btn" title="Edit event"
+                          onClick={e => { e.stopPropagation(); setEditingEvent(i); setShowEventModal(event); }}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="u-event-action-btn u-event-action-btn--danger" title="Delete event"
+                          onClick={e => { e.stopPropagation(); deleteEvent(i); }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                    {/* Anchor dots — while connecting, click one to pin
+                        exactly where the line attaches on this card. On the
+                        active source card, the chosen side stays highlighted
+                        until a target is picked. */}
+                    {connectingFrom !== null && (
+                      <>
+                        {(['top', 'right', 'bottom', 'left'] as Side[]).map(side => (
+                          <div
+                            key={side}
+                            className={`u-anchor-dot u-anchor-dot--${side} ${connectingFrom === i && connectFromSide === side ? 'u-anchor-dot--active' : ''}`}
+                            title={connectingFrom === i ? `Start the line from here (${side})` : `End the line here (${side})`}
+                            onClick={e => handleAnchorClick(e, i, side)}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Strands mode event labels */}
+              {displayMode === 'strands' && layers.map((_, layerIdx) => {
+                const strandY = layerIdx * layerHeight + layerHeight / 2;
+                const layerEvts = events
+                  .map((e, globalIdx) => ({ e, globalIdx }))
+                  .filter(({ e }) => e.layer === layerIdx);
+                const labelPositions = computeStrandLabels(layerEvts);
+
+                return labelPositions.map(({ eventIndex, side, yExtra }) => {
+                  const event = events[eventIndex];
+                  const baseOffset = STRAND_LABEL_BASE + yExtra;
+                  const yPx = strandY + (side === 'above' ? -(baseOffset + event.yOffset * 0.3) : (baseOffset + event.yOffset * 0.3));
+                  return (
+                    <div
+                      key={eventIndex}
+                      draggable
+                      className={`u-strand-label ${selectedEvent === eventIndex ? 'u-strand-label--selected' : ''} ${event.style === 'italic' ? 'u-strand-label--italic' : ''} ${connectingFrom === eventIndex ? 'u-event-node--connecting' : ''}`}
+                      style={{
+                        left: eventLeft(event.x),
+                        top: `${yPx}px`,
+                        color: event.borderColor || '#3E3B35',
+                      }}
+                      ref={el => { cardRefs.current[eventIndex] = el as HTMLDivElement | null; }}
+                      onDragStart={e => handleDragStart(e, eventIndex)}
+                      onClick={e => handleEventClick(e, eventIndex)}
+                      onDoubleClick={e => {
+                        e.stopPropagation();
+                        if (connectingFrom !== null) return;
+                        setEditingEvent(eventIndex);
+                        setShowEventModal(event);
+                      }}
+                    >
+                      {event.label}
+                      {selectedEvent === eventIndex && (
+                        <div className="u-event-actions">
+                          <button className="u-event-action-btn" title="Connect to another event"
+                            onClick={e => { e.stopPropagation(); setConnectingFrom(eventIndex); setConnectFromSide(null); setSelectedEvent(null); }}>
+                            <Link2 size={13} />
+                          </button>
+                          <button className="u-event-action-btn" title="Edit event"
+                            onClick={e => { e.stopPropagation(); setEditingEvent(eventIndex); setShowEventModal(event); }}>
+                            <Edit2 size={13} />
+                          </button>
+                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete event"
+                            onClick={e => { e.stopPropagation(); deleteEvent(eventIndex); }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                      {connectingFrom !== null && (
+                        <>
+                          {(['top', 'right', 'bottom', 'left'] as Side[]).map(side => (
+                            <div
+                              key={side}
+                              className={`u-anchor-dot u-anchor-dot--${side} ${connectingFrom === eventIndex && connectFromSide === side ? 'u-anchor-dot--active' : ''}`}
+                              title={connectingFrom === eventIndex ? `Start the line from here (${side})` : `End the line here (${side})`}
+                              onClick={e => handleAnchorClick(e, eventIndex, side)}
+                            />
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  );
+                });
+              })}
             </>
           )}
           </div>
