@@ -555,6 +555,23 @@ const ComplexityTimeline = () => {
     setEvents(ev => ev.map(e => ({ ...e, x: yearToXWithCuts(e.year, startYear, endYear, cuts) })));
   }, [startYear, endYear, cuts]);
 
+  // ── Warn before leaving the page ──
+  // A trackpad swipe that overshoots while scrolling the timeline can be
+  // read by the browser as a "go back"/"close tab" gesture. We can't trap
+  // that gesture directly, but we can make the browser ask for confirmation
+  // before it actually navigates away or closes — same backstop as any
+  // editor with unsaved work. Only kicks in once there's something to lose.
+  useEffect(() => {
+    const hasContent = layers.length > 0 || events.length > 0;
+    if (!hasContent) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [layers.length, events.length]);
+
   // ── Escape key ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

@@ -251,6 +251,10 @@ h1, h2, h3 {
 .u-canvas-area {
   flex: 1;
   overflow: auto;
+  /* Stops an overscroll at the left/right edge of the timeline (e.g. a
+     trackpad swipe that goes a bit past the boundary while scrolling)
+     from chaining into the browser's swipe-to-go-back/forward gesture. */
+  overscroll-behavior-x: contain;
   padding: 1.5rem;
   background: var(--bg-warm);
 }
