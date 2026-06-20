@@ -264,6 +264,53 @@ h1, h2, h3 {
 }
 .u-export-menu button:hover { background: var(--bg-warm); }
 
+.u-export-menu--profiles {
+  min-width: 220px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.u-export-profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.u-export-profile-btn {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-primary, #3E3B35);
+}
+.u-export-profile-btn:hover {
+  background: rgba(62,59,53,0.07);
+}
+.u-export-profile-btn--active {
+  background: rgba(62,59,53,0.12);
+  border-color: rgba(62,59,53,0.3);
+  font-weight: 500;
+}
+.u-export-portrait-warn {
+  font-size: 0.72rem;
+  color: #8A5A00;
+  background: rgba(200,150,0,0.08);
+  border: 1px solid rgba(200,150,0,0.25);
+  border-radius: 3px;
+  padding: 5px 8px;
+  margin: 0;
+}
+.u-export-crop-row {
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
 /* ── CONNECTING HINT ── */
 .u-connecting-hint {
   background: var(--bg-warm);

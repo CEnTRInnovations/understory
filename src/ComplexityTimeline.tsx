@@ -42,6 +42,25 @@ type Column = { label: string; startYear: number; endYear: number };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
 
+type ExportProfile = {
+  id: string;
+  label: string;
+  ratio: number;   // width / height; 0 = native
+  pxWidth: number; // render target width; 0 = native
+  fontScale: number;
+};
+
+const EXPORT_PROFILES: ExportProfile[] = [
+  { id: 'native',       label: 'Native canvas ratio',           ratio: 0,      pxWidth: 0,    fontScale: 1.0 },
+  { id: 'slide-16x9',   label: 'Slide (16:9)',                  ratio: 16/9,   pxWidth: 1920, fontScale: 1.0 },
+  { id: 'tabloid-land', label: 'Tabloid landscape (11×17)',      ratio: 17/11,  pxWidth: 3400, fontScale: 1.0 },
+  { id: 'letter-land',  label: 'Letter landscape (11×8.5)',      ratio: 11/8.5, pxWidth: 3300, fontScale: 1.0 },
+  { id: 'letter-port',  label: 'Letter portrait (8.5×11)',       ratio: 8.5/11, pxWidth: 2550, fontScale: 0.85 },
+  { id: 'book-6x9',     label: 'Book trim (6×9)',                ratio: 6/9,    pxWidth: 1800, fontScale: 0.75 },
+  { id: 'book-7x10',    label: 'Book trim (7×10)',               ratio: 7/10,   pxWidth: 2100, fontScale: 0.8 },
+];
+const PORTRAIT_IDS = new Set(['letter-port', 'book-6x9', 'book-7x10']);
+
 // ── Row height (adjustable) ──
 const LAYER_HEIGHT_DEFAULT = 120;
 const LAYER_HEIGHT_MIN     = 90;
@@ -728,6 +747,8 @@ const ComplexityTimeline = () => {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showCutModal, setShowCutModal]           = useState(false);
   const [showExportMenu, setShowExportMenu]       = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState('native');
+  const [cropInstead, setCropInstead]             = useState(false);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const svgRef      = useRef<SVGSVGElement>(null);
@@ -1090,7 +1111,12 @@ const ComplexityTimeline = () => {
     reader.readAsText(file);
   };
 
-  function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, span: number) {
+  function scaledFont(base: number, scale: number, weight?: string, italic?: boolean): string {
+    const size = Math.round(base * scale);
+    return `${italic ? 'italic ' : ''}${weight ? weight + ' ' : ''}${size}px "Alegreya Sans", sans-serif`;
+  }
+
+  function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, span: number, fontScale = 1.0) {
     // Connections
     connections.forEach(conn => {
       const from = getEventPos(conn.from);
@@ -1119,7 +1145,7 @@ const ComplexityTimeline = () => {
       const cw = (yearToPct(col.endYear) / 100) * w - x;
       ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
-      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
       ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, 18);
     });
 
@@ -1128,7 +1154,7 @@ const ComplexityTimeline = () => {
       const y = i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = '500 10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
       ctx.textAlign = 'left'; ctx.fillText(lyr, 10, y + 14);
     });
 
@@ -1146,7 +1172,7 @@ const ComplexityTimeline = () => {
       const tw = (yearToPct(trend.endYear) / 100) * w - x;
       const th = 20; const ty = h - (48 + i * 22) - th;
       ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = trend.color; ctx.fillRect(x, ty, tw, th); ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = '11px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#fff'; ctx.font = scaledFont(11, fontScale);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(trend.label, x + tw / 2, ty + th / 2);
       ctx.textBaseline = 'alphabetic';
@@ -1158,7 +1184,7 @@ const ComplexityTimeline = () => {
       const y = ev.layer * layerHeight + ev.yOffset;
       const cardEl = cardRefs.current[evi];
       const padding = 6; const lineHeight = 13;
-      const fontSpec = (ev.style === 'italic' ? 'italic ' : '') + '12px "Alegreya Sans", sans-serif';
+      const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
       ctx.font = fontSpec;
       const bw = cardEl ? cardEl.offsetWidth : 110;
       const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
@@ -1185,19 +1211,19 @@ const ComplexityTimeline = () => {
       const x = (yearToPct(yr) / 100) * w;
       ctx.strokeStyle = '#8A867E';
       ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
       ctx.textAlign = 'center'; ctx.fillText(yr.toString(), x, axY + 18);
     }
   }
 
-  function drawStrandsMode(ctx: CanvasRenderingContext2D, w: number, h: number, span: number) {
+  function drawStrandsMode(ctx: CanvasRenderingContext2D, w: number, h: number, span: number, fontScale = 1.0) {
     // Columns (same as cards mode)
     columns.forEach(col => {
       const x = (yearToPct(col.startYear) / 100) * w;
       const cw = (yearToPct(col.endYear) / 100) * w - x;
       ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
-      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
       ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, 18);
     });
 
@@ -1255,7 +1281,7 @@ const ComplexityTimeline = () => {
         const x = eventLeftPx(ev.x, w);
         const baseOffset = STRAND_LABEL_BASE + yExtra;
         const yPx = strandY + (side === 'above' ? -(baseOffset + ev.yOffset * 0.3) : (baseOffset + ev.yOffset * 0.3));
-        const fontSpec = (ev.style === 'italic' ? 'italic ' : '') + '11px "Alegreya Sans", sans-serif';
+        const fontSpec = scaledFont(11, fontScale, undefined, ev.style === 'italic');
         ctx.font = fontSpec;
         ctx.fillStyle = ev.borderColor || '#3E3B35';
         ctx.textAlign = 'center';
@@ -1270,7 +1296,7 @@ const ComplexityTimeline = () => {
       const y = i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = '500 10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
       ctx.textAlign = 'left'; ctx.fillText(lyr, 10, y + 14);
     });
 
@@ -1291,7 +1317,7 @@ const ComplexityTimeline = () => {
       const ty = h - (48 + i * (STRAND_BAR_H + STRAND_BAR_G)) - STRAND_BAR_H;
       ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = trend.color;
       ctx.fillRect(x, ty, tw, STRAND_BAR_H); ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#fff'; ctx.font = scaledFont(10, fontScale);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillText(trend.label, x + 4, ty + STRAND_BAR_H / 2);
       ctx.textBaseline = 'alphabetic';
@@ -1307,17 +1333,14 @@ const ComplexityTimeline = () => {
       const x = (yearToPct(yr) / 100) * w;
       ctx.strokeStyle = '#8A867E';
       ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
       ctx.textAlign = 'center'; ctx.fillText(yr.toString(), x, axY + 18);
     }
   }
 
-  const exportPNG = async () => {
+  const exportPNG = async (profile: ExportProfile = EXPORT_PROFILES[0]) => {
     if (!timelineRef.current) return;
 
-    // Make sure "Alegreya Sans" (regular, 500 weight, italic) is fully
-    // loaded before we draw any text — otherwise canvas silently falls
-    // back to a default font on the first export.
     try {
       await Promise.all([
         document.fonts.load('10px "Alegreya Sans"'),
@@ -1327,22 +1350,70 @@ const ComplexityTimeline = () => {
       await document.fonts.ready;
     } catch { /* best effort */ }
 
-    const rect  = timelineRef.current.getBoundingClientRect();
-    const scale = 2;
+    const rect = timelineRef.current.getBoundingClientRect();
     const canvas = document.createElement('canvas');
-    canvas.width  = rect.width  * scale;
-    canvas.height = rect.height * scale;
-    const ctx = canvas.getContext('2d')!;
-    ctx.scale(scale, scale);
-    ctx.fillStyle = '#F6F2E7';
-    ctx.fillRect(0, 0, rect.width, rect.height);
 
-    const span = endYear - startYear;
+    let targetW: number;
+    let targetH: number;
+    let contentScale: number;
+    let offsetX = 0;
+    let offsetY = 0;
 
-    if (displayMode === 'strands') {
-      drawStrandsMode(ctx, rect.width, rect.height, span);
+    if (profile.id === 'native' || profile.ratio === 0) {
+      // Current behavior: 2× scale of the live viewport
+      const scale = 2;
+      canvas.width  = rect.width  * scale;
+      canvas.height = rect.height * scale;
+      const ctx = canvas.getContext('2d')!;
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#F6F2E7';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      const span = endYear - startYear;
+      if (displayMode === 'strands') drawStrandsMode(ctx, rect.width, rect.height, span, profile.fontScale);
+      else drawCardsMode(ctx, rect.width, rect.height, span, profile.fontScale);
     } else {
-      drawCardsMode(ctx, rect.width, rect.height, span);
+      targetW = profile.pxWidth;
+      targetH = Math.round(profile.pxWidth / profile.ratio);
+      canvas.width  = targetW;
+      canvas.height = targetH;
+
+      const naturalW = rect.width;
+      const naturalH = rect.height;
+      const scaleToFitW = targetW / naturalW;
+      const scaleToFitH = targetH / naturalH;
+
+      if (cropInstead) {
+        contentScale = Math.max(scaleToFitW, scaleToFitH);
+        offsetX = (targetW - naturalW * contentScale) / 2;
+        offsetY = (targetH - naturalH * contentScale) / 2;
+      } else {
+        // Letterbox (default)
+        contentScale = Math.min(scaleToFitW, scaleToFitH);
+        offsetX = (targetW - naturalW * contentScale) / 2;
+        offsetY = (targetH - naturalH * contentScale) / 2;
+      }
+
+      const ctx = canvas.getContext('2d')!;
+      // Background fill (covers letterbox padding)
+      ctx.fillStyle = '#F6F2E7';
+      ctx.fillRect(0, 0, targetW, targetH);
+
+      if (cropInstead) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, targetW, targetH);
+        ctx.clip();
+      }
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(contentScale, contentScale);
+
+      const drawW = naturalW;
+      const drawH = naturalH;
+      const span  = endYear - startYear;
+      if (displayMode === 'strands') drawStrandsMode(ctx, drawW, drawH, span, profile.fontScale);
+      else drawCardsMode(ctx, drawW, drawH, span, profile.fontScale);
+
+      if (cropInstead) ctx.restore();
     }
 
     canvas.toBlob(blob => {
@@ -1437,8 +1508,46 @@ const ComplexityTimeline = () => {
             <Image size={13} /> Export
           </button>
           {showExportMenu && (
-            <div className="u-export-menu">
-              <button onClick={() => { exportPNG(); setShowExportMenu(false); }}>Export as PNG</button>
+            <div className="u-export-menu u-export-menu--profiles">
+              <div className="u-export-profile-list">
+                {EXPORT_PROFILES.map(p => (
+                  <button
+                    key={p.id}
+                    className={`u-export-profile-btn ${selectedProfileId === p.id ? 'u-export-profile-btn--active' : ''}`}
+                    onClick={() => setSelectedProfileId(p.id)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const profile = EXPORT_PROFILES.find(p => p.id === selectedProfileId)!;
+                const isPortrait = PORTRAIT_IDS.has(selectedProfileId);
+                const rect = timelineRef.current?.getBoundingClientRect();
+                const naturalRatio = rect ? rect.width / rect.height : 0;
+                const showPortraitWarning = isPortrait && profile.ratio > 0 && naturalRatio > profile.ratio * 2.5;
+                return (
+                  <>
+                    {showPortraitWarning && (
+                      <p className="u-export-portrait-warn">
+                        This timeline is much wider than tall — consider Slide or Tabloid for full legibility,
+                        or use Cuts to shorten the visible range before exporting portrait.
+                      </p>
+                    )}
+                    <label className="u-export-crop-row">
+                      <input type="checkbox" checked={cropInstead} onChange={e => setCropInstead(e.target.checked)} />
+                      {' '}Crop to fit (default: letterbox)
+                    </label>
+                    <button
+                      className="u-btn u-btn--primary"
+                      onClick={() => { exportPNG(profile); setShowExportMenu(false); }}
+                    >
+                      Export as PNG
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
