@@ -1090,6 +1090,228 @@ const ComplexityTimeline = () => {
     reader.readAsText(file);
   };
 
+  function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, span: number) {
+    // Connections
+    connections.forEach(conn => {
+      const from = getEventPos(conn.from);
+      const to   = getEventPos(conn.to);
+      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+      ctx.save();
+      ctx.strokeStyle = conn.color;
+      ctx.lineWidth   = conn.width;
+      ctx.setLineDash(conn.lineStyle === 'dashed' ? [6, 4] : conn.lineStyle === 'dotted' ? [2, 4] : []);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2); ctx.stroke();
+      ctx.restore();
+      if (conn.showArrow) {
+        const angle = Math.atan2(y2 - c2y, x2 - c2x);
+        const size  = conn.arrowSize ?? DEFAULT_ARROW_SIZE;
+        ctx.save(); ctx.fillStyle = conn.color; ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - size * Math.cos(angle - Math.PI / 6), y2 - size * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(x2 - size * Math.cos(angle + Math.PI / 6), y2 - size * Math.sin(angle + Math.PI / 6));
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+    });
+
+    // Columns
+    columns.forEach(col => {
+      const x = (yearToPct(col.startYear) / 100) * w;
+      const cw = (yearToPct(col.endYear) / 100) * w - x;
+      ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
+      ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
+      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, 18);
+    });
+
+    // Layer dividers + labels
+    layers.forEach((lyr, i) => {
+      const y = i * layerHeight;
+      ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      ctx.fillStyle = '#6b6760'; ctx.font = '500 10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'left'; ctx.fillText(lyr, 10, y + 14);
+    });
+
+    // Cuts
+    cuts.forEach(cut => {
+      const x = (yearToPct((cut.startYear + cut.endYear) / 2) / 100) * w;
+      ctx.strokeStyle = '#3E3B35'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 5, h); ctx.lineTo(x - 1, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
+    });
+
+    // Trend bands
+    trends.forEach((trend, i) => {
+      const x = (yearToPct(trend.startYear) / 100) * w;
+      const tw = (yearToPct(trend.endYear) / 100) * w - x;
+      const th = 20; const ty = h - (48 + i * 22) - th;
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = trend.color; ctx.fillRect(x, ty, tw, th); ctx.restore();
+      ctx.fillStyle = '#fff'; ctx.font = '11px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(trend.label, x + tw / 2, ty + th / 2);
+      ctx.textBaseline = 'alphabetic';
+    });
+
+    // Events (cards)
+    events.forEach((ev, evi) => {
+      const x = eventLeftPx(ev.x, w);
+      const y = ev.layer * layerHeight + ev.yOffset;
+      const cardEl = cardRefs.current[evi];
+      const padding = 6; const lineHeight = 13;
+      const fontSpec = (ev.style === 'italic' ? 'italic ' : '') + '12px "Alegreya Sans", sans-serif';
+      ctx.font = fontSpec;
+      const bw = cardEl ? cardEl.offsetWidth : 110;
+      const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
+      const contentHeight = lines.length * lineHeight + padding * 2;
+      const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
+      const centerY = y + bh / 2;
+      const boxTop  = centerY - bh / 2;
+      ctx.fillStyle = ev.color; ctx.strokeStyle = ev.borderColor; ctx.lineWidth = 2;
+      ctx.fillRect(x - bw / 2, boxTop, bw, bh); ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
+      ctx.fillStyle = '#3E3B35'; ctx.font = fontSpec;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
+      lines.forEach((line, li) => ctx.fillText(line, x, textStartY + li * lineHeight));
+      ctx.textBaseline = 'alphabetic';
+    });
+
+    // Year axis
+    const step = span <= 20 ? 2 : 5;
+    const axY  = h - 48;
+    ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(w, axY); ctx.stroke();
+    for (let yr = startYear; yr <= endYear; yr += step) {
+      if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
+      const x = (yearToPct(yr) / 100) * w;
+      ctx.strokeStyle = '#8A867E';
+      ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
+      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(yr.toString(), x, axY + 18);
+    }
+  }
+
+  function drawStrandsMode(ctx: CanvasRenderingContext2D, w: number, h: number, span: number) {
+    // Columns (same as cards mode)
+    columns.forEach(col => {
+      const x = (yearToPct(col.startYear) / 100) * w;
+      const cw = (yearToPct(col.endYear) / 100) * w - x;
+      ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
+      ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
+      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, 18);
+    });
+
+    // Strand lines (one per layer)
+    layers.forEach((_, i) => {
+      const y = i * layerHeight + layerHeight / 2;
+      ctx.save();
+      ctx.strokeStyle = '#3E3B35'; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w - 10, y); ctx.stroke();
+      // Arrowhead
+      ctx.globalAlpha = 0.5; ctx.fillStyle = '#3E3B35';
+      ctx.beginPath();
+      ctx.moveTo(w - 10, y);
+      ctx.lineTo(w - 18, y - 4);
+      ctx.lineTo(w - 18, y + 4);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+
+    // Connections — mirrors DOM §1.3a: curvature discipline + anchor spreading + low opacity
+    // (hover isolation is DOM-only; PNG is a static snapshot with no selection state)
+    const connAtEvent = new Map<number, number[]>();
+    connections.forEach((conn, ci) => {
+      if (!connAtEvent.has(conn.from)) connAtEvent.set(conn.from, []);
+      if (!connAtEvent.has(conn.to))   connAtEvent.set(conn.to,   []);
+      connAtEvent.get(conn.from)!.push(ci);
+      connAtEvent.get(conn.to)!.push(ci);
+    });
+    connections.forEach((conn, i) => {
+      const fromConns  = connAtEvent.get(conn.from) ?? [];
+      const toConns    = connAtEvent.get(conn.to)   ?? [];
+      const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
+      const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
+      const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerHeight, fromOffset, toOffset);
+      ctx.save();
+      ctx.strokeStyle = '#9E9B96'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(geom.x1, geom.y1);
+      if (geom.kind === 'quad') ctx.quadraticCurveTo(geom.cx, geom.cy, geom.x2, geom.y2);
+      else ctx.bezierCurveTo(geom.cx1, geom.cy1, geom.cx2, geom.cy2, geom.x2, geom.y2);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // Event labels (plain text, alternating above/below per strand)
+    layers.forEach((_, layerIdx) => {
+      const strandY = layerIdx * layerHeight + layerHeight / 2;
+      const layerEvts = events
+        .map((e, globalIdx) => ({ e, globalIdx }))
+        .filter(({ e }) => e.layer === layerIdx);
+      const labelPositions = computeStrandLabels(layerEvts, w);
+
+      labelPositions.forEach(({ eventIndex, side, yExtra }) => {
+        const ev = events[eventIndex];
+        const x = eventLeftPx(ev.x, w);
+        const baseOffset = STRAND_LABEL_BASE + yExtra;
+        const yPx = strandY + (side === 'above' ? -(baseOffset + ev.yOffset * 0.3) : (baseOffset + ev.yOffset * 0.3));
+        const fontSpec = (ev.style === 'italic' ? 'italic ' : '') + '11px "Alegreya Sans", sans-serif';
+        ctx.font = fontSpec;
+        ctx.fillStyle = ev.borderColor || '#3E3B35';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ev.label, x, yPx);
+        ctx.textBaseline = 'alphabetic';
+      });
+    });
+
+    // Layer labels (left-edge, like cards mode)
+    layers.forEach((lyr, i) => {
+      const y = i * layerHeight;
+      ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      ctx.fillStyle = '#6b6760'; ctx.font = '500 10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'left'; ctx.fillText(lyr, 10, y + 14);
+    });
+
+    // Cuts (same as cards mode)
+    cuts.forEach(cut => {
+      const x = (yearToPct((cut.startYear + cut.endYear) / 2) / 100) * w;
+      ctx.strokeStyle = '#3E3B35'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 5, h); ctx.lineTo(x - 1, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
+    });
+
+    // Trend bars (thin, stacked, left-edge label)
+    const STRAND_BAR_H = 14; const STRAND_BAR_G = 4;
+    const sorted = [...trends].sort((a, b) => a.startYear - b.startYear);
+    sorted.forEach((trend, i) => {
+      const x = (yearToPct(trend.startYear) / 100) * w;
+      const tw = (yearToPct(trend.endYear) / 100) * w - x;
+      const ty = h - (48 + i * (STRAND_BAR_H + STRAND_BAR_G)) - STRAND_BAR_H;
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = trend.color;
+      ctx.fillRect(x, ty, tw, STRAND_BAR_H); ctx.restore();
+      ctx.fillStyle = '#fff'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(trend.label, x + 4, ty + STRAND_BAR_H / 2);
+      ctx.textBaseline = 'alphabetic';
+    });
+
+    // Year axis (same as cards mode)
+    const step = span <= 20 ? 2 : 5;
+    const axY  = h - 48;
+    ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(w, axY); ctx.stroke();
+    for (let yr = startYear; yr <= endYear; yr += step) {
+      if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
+      const x = (yearToPct(yr) / 100) * w;
+      ctx.strokeStyle = '#8A867E';
+      ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
+      ctx.fillStyle = '#6b6760'; ctx.font = '10px "Alegreya Sans", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(yr.toString(), x, axY + 18);
+    }
+  }
+
   const exportPNG = async () => {
     if (!timelineRef.current) return;
 
@@ -1103,7 +1325,7 @@ const ComplexityTimeline = () => {
         document.fonts.load('italic 10px "Alegreya Sans"'),
       ]);
       await document.fonts.ready;
-    } catch { /* best effort — fall through and export anyway */ }
+    } catch { /* best effort */ }
 
     const rect  = timelineRef.current.getBoundingClientRect();
     const scale = 2;
@@ -1114,139 +1336,13 @@ const ComplexityTimeline = () => {
     ctx.scale(scale, scale);
     ctx.fillStyle = '#F6F2E7';
     ctx.fillRect(0, 0, rect.width, rect.height);
+
     const span = endYear - startYear;
 
-    // ── Connections (drawn first, to match the live DOM stacking order
-    // where the SVG overlay sits behind columns/layers/events) ──
-    connections.forEach(conn => {
-      const from = getEventPos(conn.from);
-      const to   = getEventPos(conn.to);
-      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
-
-      ctx.save();
-      ctx.strokeStyle = conn.color;
-      ctx.lineWidth   = conn.width;
-      ctx.setLineDash(
-        conn.lineStyle === 'dashed' ? [6, 4] :
-        conn.lineStyle === 'dotted' ? [2, 4] : []
-      );
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2);
-      ctx.stroke();
-      ctx.restore();
-
-      if (conn.showArrow) {
-        const angle = Math.atan2(y2 - c2y, x2 - c2x);
-        const size  = conn.arrowSize ?? DEFAULT_ARROW_SIZE;
-        ctx.save();
-        ctx.fillStyle = conn.color;
-        ctx.beginPath();
-        ctx.moveTo(x2, y2);
-        ctx.lineTo(x2 - size * Math.cos(angle - Math.PI / 6), y2 - size * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(x2 - size * Math.cos(angle + Math.PI / 6), y2 - size * Math.sin(angle + Math.PI / 6));
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-    });
-
-    columns.forEach(col => {
-      const x = (yearToPct(col.startYear) / 100) * rect.width;
-      const w = (yearToPct(col.endYear)   / 100) * rect.width - x;
-      ctx.fillStyle   = 'rgba(62,59,53,0.04)';
-      ctx.fillRect(x, 0, w, rect.height);
-      ctx.strokeStyle = 'rgba(62,59,53,0.12)';
-      ctx.strokeRect(x, 0, w, rect.height);
-      ctx.fillStyle = '#6b6760';
-      ctx.font = '10px "Alegreya Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(col.label, x + w / 2, 18);
-    });
-
-    layers.forEach((lyr, i) => {
-      const y = i * layerHeight;
-      ctx.strokeStyle = 'rgba(62,59,53,0.14)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(rect.width, y); ctx.stroke();
-      ctx.fillStyle = '#6b6760';
-      ctx.font = '500 10px "Alegreya Sans", sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(lyr, 10, y + 14);
-    });
-
-    cuts.forEach(cut => {
-      const x = (yearToPct((cut.startYear + cut.endYear) / 2) / 100) * rect.width;
-      ctx.strokeStyle = '#3E3B35';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(x - 5, rect.height); ctx.lineTo(x - 1, 0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x + 1, rect.height); ctx.lineTo(x + 5, 0); ctx.stroke();
-    });
-
-    trends.forEach((trend, i) => {
-      const x = (yearToPct(trend.startYear) / 100) * rect.width;
-      const w = (yearToPct(trend.endYear)   / 100) * rect.width - x;
-      const h = 20;
-      const y = rect.height - (48 + i * 22) - h;
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = trend.color;
-      ctx.fillRect(x, y, w, h);
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '11px "Alegreya Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(trend.label, x + w / 2, y + h / 2);
-      ctx.textBaseline = 'alphabetic';
-    });
-
-    events.forEach((ev, evi) => {
-      const x = eventLeftPx(ev.x, rect.width);
-      const y = ev.layer * layerHeight + ev.yOffset;
-      const cardEl = cardRefs.current[evi];
-      const padding    = 6;
-      const lineHeight = 13;
-      const fontSpec   = (ev.style === 'italic' ? 'italic ' : '') + '12px "Alegreya Sans", sans-serif';
-      ctx.font = fontSpec;
-      const bw = cardEl ? cardEl.offsetWidth : 110;
-      const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
-      const contentHeight = lines.length * lineHeight + padding * 2;
-      const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
-      const centerY = y + bh / 2; // matches getEventPos anchor (real card size)
-      const boxTop  = centerY - bh / 2;
-
-      ctx.fillStyle   = ev.color;
-      ctx.strokeStyle = ev.borderColor;
-      ctx.lineWidth   = 2;
-      ctx.fillRect(x - bw / 2, boxTop, bw, bh);
-      ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
-
-      ctx.fillStyle    = '#3E3B35';
-      ctx.font          = fontSpec;
-      ctx.textAlign     = 'center';
-      ctx.textBaseline  = 'middle';
-      const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
-      lines.forEach((line, li) => {
-        ctx.fillText(line, x, textStartY + li * lineHeight);
-      });
-      ctx.textBaseline = 'alphabetic';
-    });
-
-    const step = span <= 20 ? 2 : 5;
-    const axY  = rect.height - 48;
-    ctx.strokeStyle = 'rgba(62,59,53,0.20)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(rect.width, axY); ctx.stroke();
-    for (let yr = startYear; yr <= endYear; yr += step) {
-      if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
-      const x = (yearToPct(yr) / 100) * rect.width;
-      ctx.strokeStyle = '#8A867E';
-      ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
-      ctx.fillStyle = '#6b6760';
-      ctx.font = '10px "Alegreya Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(yr.toString(), x, axY + 18);
+    if (displayMode === 'strands') {
+      drawStrandsMode(ctx, rect.width, rect.height, span);
+    } else {
+      drawCardsMode(ctx, rect.width, rect.height, span);
     }
 
     canvas.toBlob(blob => {
