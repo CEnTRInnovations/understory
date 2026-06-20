@@ -549,6 +549,53 @@ h1, h2, h3 {
   outline-offset: 2px;
 }
 
+/* ── CONNECTION ANCHOR DOTS ──
+   Shown on every card while a connection is being drawn, so the user can
+   click exactly where on the source/target card the line should attach,
+   instead of leaving it to the automatic side-picking heuristic. */
+.u-anchor-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-main);
+  border: 2px solid var(--secondary);
+  cursor: crosshair;
+  z-index: 12;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+.u-anchor-dot:hover {
+  background: var(--secondary);
+}
+.u-anchor-dot--active {
+  background: var(--secondary);
+  border-color: var(--text);
+}
+.u-anchor-dot--top {
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.u-anchor-dot--bottom {
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 50%);
+}
+.u-anchor-dot--left {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.u-anchor-dot--right {
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+}
+.u-anchor-dot--top:hover    { transform: translate(-50%, -50%) scale(1.25); }
+.u-anchor-dot--bottom:hover { transform: translate(-50%, 50%)  scale(1.25); }
+.u-anchor-dot--left:hover   { transform: translate(-50%, -50%) scale(1.25); }
+.u-anchor-dot--right:hover  { transform: translate(50%, -50%)  scale(1.25); }
+
 /* ── EVENT ACTION POPUP ── */
 .u-event-actions {
   position: absolute;

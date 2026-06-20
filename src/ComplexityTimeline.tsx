@@ -24,7 +24,16 @@ type Connection = {
   lineStyle: 'solid' | 'dashed' | 'dotted';
   width: number;
   showArrow: boolean;
+  // Length (px) of the arrowhead, base-to-tip. Undefined falls back to
+  // DEFAULT_ARROW_SIZE for connections saved before this field existed.
+  arrowSize?: number;
+  // Which edge of the source/target card the line attaches to. Undefined
+  // means "auto" — pick whichever side faces the other event, as before.
+  fromSide?: Side;
+  toSide?: Side;
 };
+
+const DEFAULT_ARROW_SIZE = 8;
 
 type Column = { label: string; startYear: number; endYear: number };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
@@ -58,39 +67,84 @@ const EVENT_EDGE_PADDING = 70; // px
 // connected events sit roughly one above the other.
 const EVENT_CARD_HALF_HEIGHT = 18; // px
 
-// Shared connector-curve geometry, used by both the live SVG render and the
-// PNG export so the two stay visually identical. Mirrors the anchor logic:
-// top/bottom of card when roughly vertical, side-anchored with a fixed
-// "elbow width" when roughly horizontal.
-type EventAnchor = { x: number; y: number; top: number; bottom: number };
-function getConnectorGeometry(from: EventAnchor, to: EventAnchor) {
-  const dxRaw = to.x - from.x;
-  const dyRaw = to.y - from.y;
-  const isVertical = Math.abs(dxRaw) < Math.abs(dyRaw);
-  let x1: number, y1: number, x2: number, y2: number, c1x: number, c1y: number, c2x: number, c2y: number;
-  if (isVertical) {
-    if (from.y <= to.y) {
-      x1 = from.x; y1 = from.bottom;
-      x2 = to.x;   y2 = to.top;
-    } else {
-      x1 = from.x; y1 = from.top;
-      x2 = to.x;   y2 = to.bottom;
-    }
-    const dy = y2 - y1;
-    c1x = x1; c1y = y1 + dy * 0.5;
-    c2x = x2; c2y = y1 + dy * 0.5;
-  } else {
-    const dir = from.x < to.x ? 1 : -1;
-    const EW  = 65;
-    x1 = from.x + dir * EW;
-    y1 = from.y;
-    x2 = to.x   - dir * EW;
-    y2 = to.y;
-    const dx = x2 - x1;
-    c1x = x1 + dx * 0.5; c1y = y1;
-    c2x = x1 + dx * 0.5; c2y = y2;
+// Which edge of an event card a connection attaches to. 'auto' means: pick
+// whichever side faces the other endpoint, the old default behavior.
+type Side = 'top' | 'right' | 'bottom' | 'left';
+
+type EventAnchor = { x: number; y: number; top: number; bottom: number; halfWidth?: number };
+
+// Half the event-card width (110px / 2), used as a fallback to place
+// left/right anchors when the real card hasn't been measured yet.
+const CONNECTOR_HALF_WIDTH = 55;
+// How far a connector "pushes out" perpendicular to its anchor edge before
+// curving toward the other endpoint — gives every connection a clean,
+// perpendicular departure/arrival from the card instead of a diagonal cut.
+const CONNECTOR_ELBOW = 45;
+// Small explicit gap left between the anchor point and the card's real
+// edge, so the line doesn't appear to touch/overlap the border.
+const ANCHOR_GAP = 5;
+
+function autoSide(center: { x: number; y: number }, other: { x: number; y: number }): Side {
+  const dx = other.x - center.x;
+  const dy = other.y - center.y;
+  if (Math.abs(dx) < Math.abs(dy)) return dy > 0 ? 'bottom' : 'top';
+  return dx > 0 ? 'right' : 'left';
+}
+
+function anchorOnSide(box: EventAnchor, side: Side): { x: number; y: number } {
+  const centerY = (box.top + box.bottom) / 2;
+  const halfWidth = box.halfWidth ?? CONNECTOR_HALF_WIDTH;
+  switch (side) {
+    case 'top':    return { x: box.x, y: box.top - ANCHOR_GAP };
+    case 'bottom': return { x: box.x, y: box.bottom + ANCHOR_GAP };
+    case 'left':   return { x: box.x - halfWidth - ANCHOR_GAP, y: centerY };
+    case 'right':  return { x: box.x + halfWidth + ANCHOR_GAP, y: centerY };
   }
-  return { isVertical, x1, y1, x2, y2, c1x, c1y, c2x, c2y };
+}
+
+function sideNormal(side: Side): { x: number; y: number } {
+  switch (side) {
+    case 'top':    return { x: 0, y: -1 };
+    case 'bottom': return { x: 0, y: 1 };
+    case 'left':   return { x: -1, y: 0 };
+    case 'right':  return { x: 1, y: 0 };
+  }
+}
+
+// Shared connector-curve geometry, used by both the live SVG render and the
+// PNG export so the two stay visually identical. Each endpoint either uses
+// an explicitly chosen side (fromSide/toSide) or falls back to whichever
+// side faces the other event ('auto').
+function getConnectorGeometry(
+  from: EventAnchor, to: EventAnchor,
+  fromSide?: Side, toSide?: Side
+) {
+  const fromCenter = { x: from.x, y: (from.top + from.bottom) / 2 };
+  const toCenter   = { x: to.x,   y: (to.top   + to.bottom)   / 2 };
+  const sideA = fromSide ?? autoSide(fromCenter, toCenter);
+  const sideB = toSide   ?? autoSide(toCenter, fromCenter);
+
+  const p1 = anchorOnSide(from, sideA);
+  const p2 = anchorOnSide(to,   sideB);
+  const n1 = sideNormal(sideA);
+  const n2 = sideNormal(sideB);
+
+  const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
+  const c1x = x1 + n1.x * CONNECTOR_ELBOW, c1y = y1 + n1.y * CONNECTOR_ELBOW;
+  const c2x = x2 + n2.x * CONNECTOR_ELBOW, c2y = y2 + n2.y * CONNECTOR_ELBOW;
+
+  return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, sideA, sideB };
+}
+
+// Point at t=0.5 on a cubic bezier — used to position the connection's
+// edit/delete popup at the true curve midpoint (the simple endpoint average
+// only works when the control points are mirror-symmetric, which isn't
+// guaranteed once anchors can be pinned to arbitrary sides).
+function bezierMidpoint(x1: number, y1: number, c1x: number, c1y: number, c2x: number, c2y: number, x2: number, y2: number) {
+  return {
+    x: (x1 + 3 * c1x + 3 * c2x + x2) / 8,
+    y: (y1 + 3 * c1y + 3 * c2y + y2) / 8,
+  };
 }
 
 // Greedy word-wrap for canvas text, since fillText doesn't wrap on its own.
@@ -397,18 +451,23 @@ const TrendModal = ({
 };
 
 const ConnectionModal = ({
-  onClose, onSave, from, to, initialData
+  onClose, onSave, from, to, fromSide, toSide, initialData
 }: {
   onClose: () => void;
   onSave: (data: Connection) => void;
   from: number;
   to: number;
+  fromSide?: Side;
+  toSide?: Side;
   initialData?: Connection;
 }) => {
   const [color, setColor]         = useState(initialData?.color ?? '#3F5E78');
   const [lineStyle, setLineStyle] = useState<'solid'|'dashed'|'dotted'>(initialData?.lineStyle ?? 'solid');
   const [width, setWidth]         = useState(initialData?.width ?? 2);
   const [showArrow, setShowArrow] = useState(initialData?.showArrow ?? true);
+  const [arrowSize, setArrowSize] = useState(initialData?.arrowSize ?? DEFAULT_ARROW_SIZE);
+  const [fromSideSel, setFromSideSel] = useState<Side | 'auto'>(initialData?.fromSide ?? fromSide ?? 'auto');
+  const [toSideSel, setToSideSel]     = useState<Side | 'auto'>(initialData?.toSide   ?? toSide   ?? 'auto');
   const isEditing = !!initialData;
 
   return (
@@ -430,14 +489,47 @@ const ConnectionModal = ({
         <input className="u-form-range" type="range" min={1} max={6} value={width}
           onChange={e => setWidth(Number(e.target.value))} />
       </div>
+      <div className="u-form-row">
+        <div className="u-form-group">
+          <label className="u-form-label">Attaches from</label>
+          <select className="u-form-select" value={fromSideSel} onChange={e => setFromSideSel(e.target.value as Side | 'auto')}>
+            <option value="auto">Auto</option>
+            <option value="top">Top</option>
+            <option value="right">Right</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+          </select>
+        </div>
+        <div className="u-form-group">
+          <label className="u-form-label">Attaches to</label>
+          <select className="u-form-select" value={toSideSel} onChange={e => setToSideSel(e.target.value as Side | 'auto')}>
+            <option value="auto">Auto</option>
+            <option value="top">Top</option>
+            <option value="right">Right</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+          </select>
+        </div>
+      </div>
       <div className="u-form-group">
         <div className="u-form-checkbox-row">
           <input type="checkbox" id="showArrow" checked={showArrow} onChange={e => setShowArrow(e.target.checked)} />
           <label htmlFor="showArrow">Show arrowhead</label>
         </div>
       </div>
+      {showArrow && (
+        <div className="u-form-group">
+          <label className="u-form-label">Arrowhead Size: {arrowSize}px</label>
+          <input className="u-form-range" type="range" min={4} max={20} value={arrowSize}
+            onChange={e => setArrowSize(Number(e.target.value))} />
+        </div>
+      )}
       <button className="u-btn u-btn--primary u-btn--full"
-        onClick={() => onSave({ from, to, color, lineStyle, width, showArrow })}>
+        onClick={() => onSave({
+          from, to, color, lineStyle, width, showArrow, arrowSize,
+          fromSide: fromSideSel === 'auto' ? undefined : fromSideSel,
+          toSide:   toSideSel   === 'auto' ? undefined : toSideSel,
+        })}>
         {isEditing ? 'Save Connection' : 'Create Connection'}
       </button>
     </Modal>
@@ -510,9 +602,12 @@ const ComplexityTimeline = () => {
 
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
   const [connectingFrom, setConnectingFrom]   = useState<number | null>(null);
+  // Tentative source-side anchor, set by clicking one of the source card's
+  // anchor dots after starting a connection but before a target is chosen.
+  const [connectFromSide, setConnectFromSide] = useState<Side | null>(null);
   const [draggingEvent, setDraggingEvent]     = useState<number | null>(null);
   const [editingEvent, setEditingEvent]       = useState<number | null>(null);
-  const [pendingConnection, setPendingConnection] = useState<{ from: number; to: number } | null>(null);
+  const [pendingConnection, setPendingConnection] = useState<{ from: number; to: number; fromSide?: Side; toSide?: Side } | null>(null);
 
   const [selectedColumn, setSelectedColumn]   = useState<number | null>(null);
   const [editingColumn, setEditingColumn]     = useState<number | null>(null);
@@ -536,6 +631,9 @@ const ComplexityTimeline = () => {
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const svgRef      = useRef<SVGSVGElement>(null);
+  // Real rendered card elements, so connector anchors can hug the actual
+  // (auto-sized) card edge instead of a fixed-size guess.
+  const cardRefs    = useRef<(HTMLDivElement | null)[]>([]);
 
   const timelineHeight = layers.length > 0 ? layers.length * layerHeight + 48 : 280;
 
@@ -577,6 +675,7 @@ const ComplexityTimeline = () => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setConnectingFrom(null);
+        setConnectFromSide(null);
         setSelectedEvent(null);
         setPendingConnection(null);
         setShowLayerModal(false);
@@ -714,7 +813,7 @@ const ComplexityTimeline = () => {
     setSelectedTrend(null);
     setSelectedConnection(null);
     setSelectedCut(null);
-    if (connectingFrom !== null) { setConnectingFrom(null); return; }
+    if (connectingFrom !== null) { setConnectingFrom(null); setConnectFromSide(null); return; }
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x    = ((e.clientX - rect.left) / rect.width) * 100;
@@ -731,12 +830,33 @@ const ComplexityTimeline = () => {
   const handleEventClick = (e: React.MouseEvent, i: number) => {
     e.stopPropagation();
     if (connectingFrom !== null && connectingFrom !== i) {
-      setPendingConnection({ from: connectingFrom, to: i });
+      // Finished by clicking the target card's body (not one of its anchor
+      // dots) — that endpoint stays 'auto'; the source keeps whichever side
+      // was pinned via its anchor dots, if any.
+      setPendingConnection({ from: connectingFrom, to: i, fromSide: connectFromSide ?? undefined });
       setConnectingFrom(null);
+      setConnectFromSide(null);
       setShowConnectionModal(true);
       return;
     }
     setSelectedEvent(prev => prev === i ? null : i);
+  };
+
+  // ── Anchor-dot click — pins which edge of a card a connection attaches
+  // to. Clicking a dot on the source card (while it's the active
+  // connectingFrom) sets the source side; clicking one on any other card
+  // finalizes the connection with that side as the target anchor. ──
+  const handleAnchorClick = (e: React.MouseEvent, i: number, side: Side) => {
+    e.stopPropagation();
+    if (connectingFrom === null) return;
+    if (connectingFrom === i) {
+      setConnectFromSide(side);
+      return;
+    }
+    setPendingConnection({ from: connectingFrom, to: i, fromSide: connectFromSide ?? undefined, toSide: side });
+    setConnectingFrom(null);
+    setConnectFromSide(null);
+    setShowConnectionModal(true);
   };
 
   // ── Drag ──
@@ -761,16 +881,24 @@ const ComplexityTimeline = () => {
   };
 
   // ── SVG connection positions ──
+  // Uses the real rendered card size (via cardRefs) when available, so
+  // connector anchors hug the actual edge instead of a fixed-size guess —
+  // falling back to the fixed constants only before the card has mounted.
   const getEventPos = useCallback((i: number) => {
     const ev   = events[i];
-    if (!ev || !timelineRef.current) return { x: 0, y: 0, top: 0, bottom: 0 };
+    if (!ev || !timelineRef.current) return { x: 0, y: 0, top: 0, bottom: 0, halfWidth: CONNECTOR_HALF_WIDTH };
     const rect = timelineRef.current.getBoundingClientRect();
-    const centerY = ev.layer * layerHeight + ev.yOffset + EVENT_CARD_HALF_HEIGHT;
+    const cardEl  = cardRefs.current[i];
+    const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
+    const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
+    const top     = ev.layer * layerHeight + ev.yOffset;
+    const centerY = top + halfH;
     return {
       x: eventLeftPx(ev.x, rect.width),
       y: centerY,
-      top: centerY - EVENT_CARD_HALF_HEIGHT,
-      bottom: centerY + EVENT_CARD_HALF_HEIGHT,
+      top: centerY - halfH,
+      bottom: centerY + halfH,
+      halfWidth: halfW,
     };
   }, [events, layerHeight]);
 
@@ -864,7 +992,7 @@ const ComplexityTimeline = () => {
     connections.forEach(conn => {
       const from = getEventPos(conn.from);
       const to   = getEventPos(conn.to);
-      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to);
+      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
 
       ctx.save();
       ctx.strokeStyle = conn.color;
@@ -881,7 +1009,7 @@ const ComplexityTimeline = () => {
 
       if (conn.showArrow) {
         const angle = Math.atan2(y2 - c2y, x2 - c2x);
-        const size  = 8;
+        const size  = conn.arrowSize ?? DEFAULT_ARROW_SIZE;
         ctx.save();
         ctx.fillStyle = conn.color;
         ctx.beginPath();
@@ -926,18 +1054,19 @@ const ComplexityTimeline = () => {
       ctx.beginPath(); ctx.moveTo(x + 1, rect.height); ctx.lineTo(x + 5, 0); ctx.stroke();
     });
 
-    events.forEach(ev => {
+    events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, rect.width);
       const y = ev.layer * layerHeight + ev.yOffset;
-      const bw = 110;
+      const cardEl = cardRefs.current[evi];
       const padding    = 6;
       const lineHeight = 13;
       const fontSpec   = (ev.style === 'italic' ? 'italic ' : '') + '12px "Alegreya Sans", sans-serif';
       ctx.font = fontSpec;
+      const bw = cardEl ? cardEl.offsetWidth : 110;
       const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
       const contentHeight = lines.length * lineHeight + padding * 2;
-      const bh = Math.max(36, contentHeight);
-      const centerY = y + EVENT_CARD_HALF_HEIGHT; // matches getEventPos anchor
+      const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
+      const centerY = y + bh / 2; // matches getEventPos anchor (real card size)
       const boxTop  = centerY - bh / 2;
 
       ctx.fillStyle   = ev.color;
@@ -1066,7 +1195,7 @@ const ComplexityTimeline = () => {
 
         {connectingFrom !== null && (
           <div className="u-connecting-hint">
-            Click another event to connect — or press Esc to cancel
+            Click another event to connect (or one of its anchor dots to choose exactly where the line lands) — or press Esc to cancel
           </div>
         )}
 
@@ -1146,43 +1275,23 @@ const ComplexityTimeline = () => {
               {/* SVG connections */}
               <svg ref={svgRef} className="u-svg-overlay">
                 <defs>
-                  {connections.map((conn, i) => (
-                    <marker key={i} id={`arrow-${i}`} markerWidth="10" markerHeight="10"
-                      refX="9" refY="3" orient="auto">
-                      <polygon points="0 0, 10 3, 0 6" fill={conn.color} />
-                    </marker>
-                  ))}
+                  {connections.map((conn, i) => {
+                    const s = conn.arrowSize ?? DEFAULT_ARROW_SIZE;
+                    const h = s * 0.6;
+                    return (
+                      <marker key={i} id={`arrow-${i}`} markerWidth={s} markerHeight={h}
+                        refX={s * 0.9} refY={h / 2} orient="auto">
+                        <polygon points={`0 0, ${s} ${h / 2}, 0 ${h}`} fill={conn.color} />
+                      </marker>
+                    );
+                  })}
                 </defs>
                 {connections.map((conn, i) => {
                   const from = getEventPos(conn.from);
                   const to   = getEventPos(conn.to);
-                  const dxRaw = to.x - from.x;
-                  const dyRaw = to.y - from.y;
-                  // When two events sit roughly one above the other, anchor
-                  // the line to the bottom of the higher card and the top of
-                  // the lower one, instead of cutting in from the side.
-                  const isVertical = Math.abs(dxRaw) < Math.abs(dyRaw);
-                  let x1: number, y1: number, x2: number, y2: number, path: string;
-                  if (isVertical) {
-                    if (from.y <= to.y) {
-                      x1 = from.x; y1 = from.bottom;
-                      x2 = to.x;   y2 = to.top;
-                    } else {
-                      x1 = from.x; y1 = from.top;
-                      x2 = to.x;   y2 = to.bottom;
-                    }
-                    const dy = y2 - y1;
-                    path = `M ${x1} ${y1} C ${x1} ${y1 + dy * 0.5}, ${x2} ${y1 + dy * 0.5}, ${x2} ${y2}`;
-                  } else {
-                    const dir = from.x < to.x ? 1 : -1;
-                    const EW  = 65;
-                    x1 = from.x + dir * EW;
-                    y1 = from.y;
-                    x2 = to.x   - dir * EW;
-                    y2 = to.y;
-                    const dx = x2 - x1;
-                    path = `M ${x1} ${y1} C ${x1 + dx * 0.5} ${y1}, ${x1 + dx * 0.5} ${y2}, ${x2} ${y2}`;
-                  }
+                  const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } =
+                    getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+                  const path = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
                   return (
                     <g key={i}>
                       <path d={path}
@@ -1195,7 +1304,8 @@ const ComplexityTimeline = () => {
                           this path to make the thin visible line clickable. */}
                       <path d={path} stroke="transparent" strokeWidth={Math.max(16, conn.width + 14)} fill="none"
                         style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
-                        onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }} />
+                        onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
+                        onDoubleClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }} />
                     </g>
                   );
                 })}
@@ -1206,9 +1316,9 @@ const ComplexityTimeline = () => {
                 if (selectedConnection !== i) return null;
                 const from = getEventPos(conn.from);
                 const to   = getEventPos(conn.to);
-                const isVertical = Math.abs(to.x - from.x) < Math.abs(to.y - from.y);
-                const midX = isVertical ? (from.x + to.x) / 2 : (from.x + to.x) / 2;
-                const midY = isVertical ? (from.y + to.y) / 2 : (from.y + to.y) / 2;
+                const { x1, y1, c1x, c1y, c2x, c2y, x2, y2 } =
+                  getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+                const { x: midX, y: midY } = bezierMidpoint(x1, y1, c1x, c1y, c2x, c2y, x2, y2);
                 return (
                   <div key={i} className="u-connection-actions" style={{ left: midX, top: midY }}>
                     <button className="u-event-action-btn" title="Edit connection"
@@ -1229,7 +1339,9 @@ const ComplexityTimeline = () => {
                 const width = yearToPct(col.endYear) - left;
                 return (
                   <div key={i} className="u-col-annotation" style={{ left: `${left}%`, width: `${width}%` }}>
-                    <div className="u-col-label" onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}>
+                    <div className="u-col-label"
+                      onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
+                      onDoubleClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
                       {col.label}
                     </div>
                     {selectedColumn === i && (
@@ -1269,6 +1381,7 @@ const ComplexityTimeline = () => {
                   return (
                     <div key={i} className="u-cut-mark" style={{ left: `${center}%` }}
                       onClick={e => { e.stopPropagation(); setSelectedCut(prev => prev === i ? null : i); }}
+                      onDoubleClick={e => { e.stopPropagation(); setEditingCut(i); setShowCutModal(true); }}
                       title={`${cut.startYear}–${cut.endYear} compressed`}>
                       <div className="u-cut-mark-line" />
                       <div className="u-cut-mark-line" />
@@ -1299,7 +1412,8 @@ const ComplexityTimeline = () => {
                     bottom: `${48 + i * 22}px`, height: 20,
                     background: trend.color
                   }}
-                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}>
+                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}
+                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
                     {trend.label}
                     {selectedTrend === i && (
                       <div className="u-trend-actions">
@@ -1326,8 +1440,15 @@ const ComplexityTimeline = () => {
                   style={{ left: eventLeft(event.x), top: `${event.layer * layerHeight + event.yOffset}px` }}
                   onDragStart={e => handleDragStart(e, i)}
                   onClick={e => handleEventClick(e, i)}
+                  onDoubleClick={e => {
+                    e.stopPropagation();
+                    if (connectingFrom !== null) return; // dbl-click shouldn't fight with connection picking
+                    setEditingEvent(i);
+                    setShowEventModal(event);
+                  }}
                 >
                   <div
+                    ref={el => { cardRefs.current[i] = el; }}
                     className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
                     style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
                   >
@@ -1336,7 +1457,7 @@ const ComplexityTimeline = () => {
                   {selectedEvent === i && (
                     <div className="u-event-actions">
                       <button className="u-event-action-btn" title="Connect to another event"
-                        onClick={e => { e.stopPropagation(); setConnectingFrom(i); setSelectedEvent(null); }}>
+                        onClick={e => { e.stopPropagation(); setConnectingFrom(i); setConnectFromSide(null); setSelectedEvent(null); }}>
                         <Link2 size={13} />
                       </button>
                       <button className="u-event-action-btn" title="Edit event"
@@ -1348,6 +1469,22 @@ const ComplexityTimeline = () => {
                         <Trash2 size={13} />
                       </button>
                     </div>
+                  )}
+                  {/* Anchor dots — while connecting, click one to pin
+                      exactly where the line attaches on this card. On the
+                      active source card, the chosen side stays highlighted
+                      until a target is picked. */}
+                  {connectingFrom !== null && (
+                    <>
+                      {(['top', 'right', 'bottom', 'left'] as Side[]).map(side => (
+                        <div
+                          key={side}
+                          className={`u-anchor-dot u-anchor-dot--${side} ${connectingFrom === i && connectFromSide === side ? 'u-anchor-dot--active' : ''}`}
+                          title={connectingFrom === i ? `Start the line from here (${side})` : `End the line here (${side})`}
+                          onClick={e => handleAnchorClick(e, i, side)}
+                        />
+                      ))}
+                    </>
                   )}
                 </div>
               ))}
@@ -1396,6 +1533,8 @@ const ComplexityTimeline = () => {
           onSave={addConnection}
           from={pendingConnection.from}
           to={pendingConnection.to}
+          fromSide={pendingConnection.fromSide}
+          toSide={pendingConnection.toSide}
           initialData={editingConnection !== null ? connections[editingConnection] : undefined}
         />
       )}
