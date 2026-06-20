@@ -391,6 +391,14 @@ h1, h2, h3 {
   gap: 0.35rem;
   width: 100%;
 }
+.u-layer-label-text {
+  flex: 1;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.u-layer-label-text:hover { color: var(--text); }
+.u-layer-edit,
 .u-layer-remove {
   background: none;
   border: none;
@@ -402,7 +410,9 @@ h1, h2, h3 {
   font-size: 12px;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
+.u-layer-edit:hover,
 .u-layer-remove:hover { opacity: 1; }
 
 /* ── YEAR AXIS ── */
