@@ -273,10 +273,17 @@ const Modal = ({
   </div>
 );
 
-const LayerModal = ({ onClose, onSave }: { onClose: () => void; onSave: (name: string) => void }) => {
-  const [name, setName] = useState('');
+const LayerModal = ({
+  onClose, onSave, initialData
+}: {
+  onClose: () => void;
+  onSave: (name: string) => void;
+  initialData?: string;
+}) => {
+  const [name, setName] = useState(initialData ?? '');
+  const isEditing = initialData !== undefined;
   return (
-    <Modal onClose={onClose} title="Add Layer">
+    <Modal onClose={onClose} title={isEditing ? 'Edit Layer' : 'Add Layer'}>
       <div className="u-form-group">
         <label className="u-form-label">Layer name</label>
         <input
@@ -290,7 +297,7 @@ const LayerModal = ({ onClose, onSave }: { onClose: () => void; onSave: (name: s
         />
       </div>
       <button className="u-btn u-btn--layer u-btn--full" onClick={() => name.trim() && onSave(name.trim())}>
-        Add Layer
+        {isEditing ? 'Save Layer' : 'Add Layer'}
       </button>
     </Modal>
   );
@@ -622,6 +629,7 @@ const ComplexityTimeline = () => {
   const [editingCut, setEditingCut]           = useState<number | null>(null);
 
   const [showLayerModal, setShowLayerModal]       = useState(false);
+  const [editingLayer, setEditingLayer]           = useState<number | null>(null);
   const [showEventModal, setShowEventModal]       = useState<boolean | Partial<TimelineEvent>>(false);
   const [showColumnModal, setShowColumnModal]     = useState(false);
   const [showTrendModal, setShowTrendModal]       = useState(false);
@@ -714,10 +722,33 @@ const ComplexityTimeline = () => {
   }, []);
 
   // ── Layer ops ──
-  const addLayer = (name: string) => { setLayers(l => [...l, name]); setShowLayerModal(false); };
-  const removeLayer = (i: number) => {
+  const saveLayer = (name: string) => {
+    if (editingLayer !== null) {
+      setLayers(l => l.map((lyr, i) => i === editingLayer ? name : lyr));
+      setEditingLayer(null);
+    } else {
+      setLayers(l => [...l, name]);
+    }
+    setShowLayerModal(false);
+  };
+  const deleteLayer = (i: number) => {
+    // Removing a layer also removes its events, and re-indexes every
+    // connection so it keeps pointing at the right (shifted) event —
+    // mirrors deleteEvent's bookkeeping, just for a whole layer at once.
+    const survivors = events
+      .map((e, idx) => ({ e, idx }))
+      .filter(o => o.e.layer !== i);
+    const indexMap = new Map<number, number>();
+    survivors.forEach((o, newIdx) => indexMap.set(o.idx, newIdx));
+
+    setEvents(survivors.map(o => o.e.layer > i ? { ...o.e, layer: o.e.layer - 1 } : o.e));
+    setConnections(conn => conn
+      .filter(c => indexMap.has(c.from) && indexMap.has(c.to))
+      .map(c => ({ ...c, from: indexMap.get(c.from)!, to: indexMap.get(c.to)! })));
     setLayers(l => l.filter((_, idx) => idx !== i));
-    setEvents(ev => ev.filter(e => e.layer !== i).map(e => e.layer > i ? { ...e, layer: e.layer - 1 } : e));
+    setSelectedEvent(null);
+    setSelectedConnection(null);
+    if (editingLayer === i) { setEditingLayer(null); setShowLayerModal(false); }
   };
 
   // ── Event ops ──
@@ -777,7 +808,7 @@ const ComplexityTimeline = () => {
       setTrends(t => t.map((tr, i) => i === editingTrend ? data : tr));
       setEditingTrend(null);
     } else {
-      if (trends.length >= 4) { alert('Maximum of 4 trend bands allowed.'); return; }
+      if (trends.length >= 6) { alert('Maximum of 6 trend bands allowed.'); return; }
       setTrends(t => [...t, data]);
     }
     maybeGrowCanvas(yearToPct(data.endYear));
@@ -1154,7 +1185,7 @@ const ComplexityTimeline = () => {
 
       {/* TOOLBAR */}
       <div className="u-toolbar">
-        <button className="u-btn u-btn--layer" onClick={() => setShowLayerModal(true)}>
+        <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
           <Layers size={13} /> Add Layer
         </button>
         <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal(true); }}>
@@ -1165,7 +1196,7 @@ const ComplexityTimeline = () => {
         </button>
         <button className="u-btn u-btn--trend" onClick={() => { setEditingTrend(null); setShowTrendModal(true); }}>
           <TrendingUp size={13} /> Add Trend
-          <span style={{ fontSize: '0.65rem', opacity: 0.75 }}>({trends.length}/4)</span>
+          <span style={{ fontSize: '0.65rem', opacity: 0.75 }}>({trends.length}/6)</span>
         </button>
         <button className="u-btn u-btn--cut" onClick={() => { setEditingCut(null); setShowCutModal(true); }}>
           <Scissors size={13} /> Add Cut
@@ -1241,10 +1272,19 @@ const ComplexityTimeline = () => {
               {layers.map((layer, i) => (
                 <div key={i} className="u-layer-gutter-row" style={{ top: i * layerHeight, height: layerHeight }}>
                   <div className="u-layer-label">
-                    {layer}
+                    <span className="u-layer-label-text"
+                      onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
+                      title="Click to rename this layer">
+                      {layer}
+                    </span>
+                    <button className="u-layer-edit"
+                      onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
+                      title="Edit layer">
+                      <Edit2 size={11} />
+                    </button>
                     <button className="u-layer-remove"
-                      onClick={() => removeLayer(i)}
-                      title="Remove layer">
+                      onClick={() => deleteLayer(i)}
+                      title="Delete layer">
                       <X size={11} />
                     </button>
                   </div>
@@ -1496,7 +1536,11 @@ const ComplexityTimeline = () => {
 
       {/* MODALS */}
       {showLayerModal && (
-        <LayerModal onClose={() => setShowLayerModal(false)} onSave={addLayer} />
+        <LayerModal
+          onClose={() => { setShowLayerModal(false); setEditingLayer(null); }}
+          onSave={saveLayer}
+          initialData={editingLayer !== null ? layers[editingLayer] : undefined}
+        />
       )}
       {showEventModal && (
         <EventModal
