@@ -1261,25 +1261,29 @@ const ComplexityTimeline = () => {
 
         <div className="u-toolbar-sep" />
 
+        <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
+          <Download size={13} /> Save
+        </button>
+        <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
+          <Upload size={13} /> Load
+        </button>
         <div className="u-export-wrap">
-          <button className="u-btn u-btn--export" onClick={() => setShowExportMenu(v => !v)}>
-            <Download size={13} /> Export
+          <button className="u-btn u-btn--export" onClick={() => setShowExportMenu(v => !v)} title="Export as PNG image">
+            <Image size={13} /> Export
           </button>
           {showExportMenu && (
             <div className="u-export-menu">
-              <button onClick={() => { exportJSON(); setShowExportMenu(false); }}>Save as JSON</button>
-              <button onClick={() => { exportPNG();  setShowExportMenu(false); }}>Export as PNG</button>
-              <button onClick={() => { triggerImportJSON(); setShowExportMenu(false); }}>Load JSON…</button>
+              <button onClick={() => { exportPNG(); setShowExportMenu(false); }}>Export as PNG</button>
             </div>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleImportFile}
-            style={{ display: 'none' }}
-          />
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json"
+          onChange={handleImportFile}
+          style={{ display: 'none' }}
+        />
 
         {connectingFrom !== null && (
           <div className="u-connecting-hint">
