@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Plus, Link2, Trash2, Edit2, Download, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
+import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -7,6 +7,8 @@ const LOGO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAHgAAAB2CAYAAAADbleiAAAKOmlDQ1BzUkdCIE
 
 
 // ── Types ──
+type DisplayMode = 'cards' | 'strands';
+
 type TimelineEvent = {
   label: string;
   year: number;
@@ -626,6 +628,7 @@ const ComplexityTimeline = () => {
   const [cuts, setCuts]               = useState<Cut[]>([]);
   const [canvasWidth, setCanvasWidth] = useState(CANVAS_WIDTH_INIT);
   const [layerHeight, setLayerHeight] = useState(LAYER_HEIGHT_DEFAULT);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
 
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
   const [connectingFrom, setConnectingFrom]   = useState<number | null>(null);
@@ -957,14 +960,14 @@ const ComplexityTimeline = () => {
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
   // reason about older files (e.g. ones missing layerHeight/canvasWidth).
-  const TIMELINE_FILE_VERSION = 2;
+  const TIMELINE_FILE_VERSION = 3;
 
   const exportJSON = () => {
     const data = {
       version: TIMELINE_FILE_VERSION,
       layers, startYear, endYear,
       events, connections, columns, trends, cuts,
-      layerHeight, canvasWidth,
+      layerHeight, canvasWidth, displayMode,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -1000,6 +1003,11 @@ const ComplexityTimeline = () => {
         setCuts(Array.isArray(data.cuts) ? data.cuts : []);
         setLayerHeight(typeof data.layerHeight === 'number' ? data.layerHeight : LAYER_HEIGHT_DEFAULT);
         setCanvasWidth(typeof data.canvasWidth === 'number' ? data.canvasWidth : CANVAS_WIDTH_INIT);
+        setDisplayMode(
+          data.version >= 3 && (data.displayMode === 'cards' || data.displayMode === 'strands')
+            ? data.displayMode
+            : 'cards'
+        );
         // Clear any in-progress selection/edit state from the timeline we're replacing.
         setSelectedEvent(null);
         setSelectedTrend(null);
@@ -1280,6 +1288,24 @@ const ComplexityTimeline = () => {
         )}
 
         <div className="u-toolbar-right">
+          <div className="u-width-controls">
+            <span className="u-year-label">Mode</span>
+            <button
+              className={`u-btn u-btn--mode ${displayMode === 'cards' ? 'u-btn--mode-active' : ''}`}
+              onClick={() => setDisplayMode('cards')}
+              title="Card mode — boxed event labels"
+            >
+              Cards
+            </button>
+            <button
+              className={`u-btn u-btn--mode ${displayMode === 'strands' ? 'u-btn--mode-active' : ''}`}
+              onClick={() => setDisplayMode('strands')}
+              title="Strand mode — Taylor-style continuous lines"
+            >
+              Strands
+            </button>
+          </div>
+
           <div className="u-width-controls">
             <span className="u-year-label">Width</span>
             <input className="u-width-slider" type="range"
