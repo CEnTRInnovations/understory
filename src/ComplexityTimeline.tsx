@@ -80,7 +80,11 @@ const CONNECTOR_HALF_WIDTH = 55;
 // How far a connector "pushes out" perpendicular to its anchor edge before
 // curving toward the other endpoint — gives every connection a clean,
 // perpendicular departure/arrival from the card instead of a diagonal cut.
-const CONNECTOR_ELBOW = 45;
+// This is now adaptive (see elbowFor below): a fixed value either looks like
+// a tight hook for close cards or an under-curved near-straight line for far
+// ones, so it's scaled to the gap between anchors and clamped to this range.
+const CONNECTOR_ELBOW_MIN = 20;
+const CONNECTOR_ELBOW_MAX = 90;
 // Small explicit gap left between the anchor point and the card's real
 // edge, so the line doesn't appear to touch/overlap the border.
 const ANCHOR_GAP = 5;
@@ -112,6 +116,18 @@ function sideNormal(side: Side): { x: number; y: number } {
   }
 }
 
+// How far a curve should push out from one anchor before bending toward the
+// other, scaled to the gap along the axis that side's normal points along
+// (horizontal gap for left/right anchors, vertical gap for top/bottom ones).
+// Scaling this way — rather than using a fixed distance — is what lets the
+// curve read as a flowing "S" between offset cards instead of either an
+// overshot loop (cards close together) or a barely-bent near-straight line
+// (cards far apart).
+function elbowFor(side: Side, dx: number, dy: number): number {
+  const gap = (side === 'left' || side === 'right') ? Math.abs(dx) : Math.abs(dy);
+  return Math.min(CONNECTOR_ELBOW_MAX, Math.max(CONNECTOR_ELBOW_MIN, gap * 0.45));
+}
+
 // Shared connector-curve geometry, used by both the live SVG render and the
 // PNG export so the two stay visually identical. Each endpoint either uses
 // an explicitly chosen side (fromSide/toSide) or falls back to whichever
@@ -131,8 +147,11 @@ function getConnectorGeometry(
   const n2 = sideNormal(sideB);
 
   const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
-  const c1x = x1 + n1.x * CONNECTOR_ELBOW, c1y = y1 + n1.y * CONNECTOR_ELBOW;
-  const c2x = x2 + n2.x * CONNECTOR_ELBOW, c2y = y2 + n2.y * CONNECTOR_ELBOW;
+  const dx = x2 - x1, dy = y2 - y1;
+  const elbow1 = elbowFor(sideA, dx, dy);
+  const elbow2 = elbowFor(sideB, dx, dy);
+  const c1x = x1 + n1.x * elbow1, c1y = y1 + n1.y * elbow1;
+  const c2x = x2 + n2.x * elbow2, c2y = y2 + n2.y * elbow2;
 
   return { x1, y1, x2, y2, c1x, c1y, c2x, c2y, sideA, sideB };
 }
