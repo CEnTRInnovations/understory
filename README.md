@@ -62,6 +62,12 @@ Understory is grounded in Peter Taylor's framework of *unruly complexity*, which
 
 Understory provides a visual workspace for that kind of mapping, making the multi-strand structure legible without forcing premature synthesis.
 
+### In Memory of Peter Taylor
+
+Peter Taylor (1953–2019) directed the Critical and Creative Thinking Program and the Program in Science, Technology, and Values at the University of Massachusetts Boston. *Unruly Complexity* argued — against the pull toward single-cause narratives — that the conditions producing any situation are heterogeneous, distributed across domains, and historically contingent; understanding them means tracing each contributing strand on its own terms rather than flattening them into one timeline.
+
+Understory exists because that argument changed how we think about institutional and community history, not only how we draw it. The tool's debt to Taylor's work is conceptual before it is visual: the layered, multi-strand canvas is one attempt to build a workspace adequate to the kind of complexity he asked researchers to take seriously. This project is offered partly in tribute to that expansion of thinking.
+
 ## Part of the CEnTR Ecosystem
 
 Understory is one of several open tools developed by [CEnTRInnovations](https://centrinnovations.github.io) to support community-engaged scholarship:

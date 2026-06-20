@@ -1218,6 +1218,16 @@ const ComplexityTimeline = () => {
           <div className="u-nav-pipe" />
           <span className="u-nav-label u-nav-label--dim">Living Timeline</span>
           <div className="u-nav-spacer" />
+          <a
+            className="u-nav-dedication"
+            href="https://www.faculty.umb.edu/peter_taylor/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="In memory of Peter Taylor (1953–2019), whose concept of unruly complexity and multi-strand mapping shaped this tool."
+          >
+            in memory of Peter Taylor
+          </a>
+          <div className="u-nav-pipe" />
           <span className="u-nav-brand">CEnTR<span>Innovations</span></span>
         </div>
       </nav>
