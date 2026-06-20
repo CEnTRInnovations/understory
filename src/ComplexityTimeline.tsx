@@ -972,7 +972,7 @@ const ComplexityTimeline = () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'understory-timeline.json';
+    a.download = 'understory-timeline.und';
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -1280,7 +1280,7 @@ const ComplexityTimeline = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json,application/json"
+          accept=".und,.json,application/json"
           onChange={handleImportFile}
           style={{ display: 'none' }}
         />
