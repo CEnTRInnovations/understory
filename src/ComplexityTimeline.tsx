@@ -282,6 +282,7 @@ type StrandLabelPos = {
 
 function computeStrandLabels(
   layerEvents: { e: TimelineEvent; globalIdx: number }[],
+  canvasWidth: number,
 ): StrandLabelPos[] {
   // Sort by x position within this layer
   const sorted = [...layerEvents].sort((a, b) => a.e.x - b.e.x);
@@ -296,10 +297,10 @@ function computeStrandLabels(
   const lastRight: { above: number; below: number } = { above: -Infinity, below: -Infinity };
   positions.forEach((pos, i) => {
     const xPct = sorted[i].e.x;
-    if (lastRight[pos.side] !== -Infinity && xPct - lastRight[pos.side] < 90) {
+    if (lastRight[pos.side] !== -Infinity && xPct - lastRight[pos.side] < (90 / canvasWidth) * 100) {
       pos.yExtra += STRAND_LABEL_STEP;
     }
-    lastRight[pos.side] = xPct + 90;
+    lastRight[pos.side] = xPct + (90 / canvasWidth) * 100;
   });
 
   return positions;
@@ -1774,7 +1775,7 @@ const ComplexityTimeline = () => {
                 const layerEvts = events
                   .map((e, globalIdx) => ({ e, globalIdx }))
                   .filter(({ e }) => e.layer === layerIdx);
-                const labelPositions = computeStrandLabels(layerEvts);
+                const labelPositions = computeStrandLabels(layerEvts, canvasWidth);
 
                 return labelPositions.map(({ eventIndex, side, yExtra }) => {
                   const event = events[eventIndex];
