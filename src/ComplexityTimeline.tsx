@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Plus, Link2, Trash2, Edit2, Download, Layers, Columns, TrendingUp } from 'lucide-react';
+import { X, Plus, Link2, Trash2, Edit2, Download, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -11,6 +11,7 @@ type TimelineEvent = {
   year: number;
   layer: number;
   x: number;
+  yOffset: number; // px from top of the layer band — lets events be repositioned vertically within a layer
   color: string;
   borderColor: string;
   style: 'normal' | 'italic';
@@ -27,12 +28,171 @@ type Connection = {
 
 type Column = { label: string; startYear: number; endYear: number };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
+type Cut    = { startYear: number; endYear: number };
 
-const LAYER_HEIGHT = 120;
+// ── Row height (adjustable) ──
+const LAYER_HEIGHT_DEFAULT = 120;
+const LAYER_HEIGHT_MIN     = 90;
+const LAYER_HEIGHT_MAX     = 220;
 
-// ── Helpers ──
-function yearToX(year: number, startYear: number, endYear: number) {
-  return ((year - startYear) / (endYear - startYear)) * 100;
+// Vertical room an event card needs within its layer band, so it can be
+// dragged anywhere within the band without crossing into the row above/below.
+const EVENT_TOP_MARGIN    = 12;
+const EVENT_BOTTOM_MARGIN = 56;
+const DEFAULT_Y_OFFSET    = 20;
+
+// ── Canvas width (endless horizontal canvas) ──
+const CANVAS_WIDTH_MIN   = 800;
+const CANVAS_WIDTH_MAX   = 20000;
+const CANVAS_WIDTH_INIT  = 1600;
+const CANVAS_EDGE_MARGIN = 160; // px of breathing room kept at the right edge
+const CANVAS_GROWTH_STEP = 600;
+
+// Horizontal room kept clear at the very start/end of the timeline so an
+// event sitting exactly on startYear or endYear has space to render and
+// isn't crowded by the sticky layer-title gutter (start) or canvas edge (end).
+const EVENT_EDGE_PADDING = 70; // px
+
+// Approx half-height of a one-line event card, used to anchor connector
+// lines to the card's top/bottom edge (rather than its side) when two
+// connected events sit roughly one above the other.
+const EVENT_CARD_HALF_HEIGHT = 18; // px
+
+// Shared connector-curve geometry, used by both the live SVG render and the
+// PNG export so the two stay visually identical. Mirrors the anchor logic:
+// top/bottom of card when roughly vertical, side-anchored with a fixed
+// "elbow width" when roughly horizontal.
+type EventAnchor = { x: number; y: number; top: number; bottom: number };
+function getConnectorGeometry(from: EventAnchor, to: EventAnchor) {
+  const dxRaw = to.x - from.x;
+  const dyRaw = to.y - from.y;
+  const isVertical = Math.abs(dxRaw) < Math.abs(dyRaw);
+  let x1: number, y1: number, x2: number, y2: number, c1x: number, c1y: number, c2x: number, c2y: number;
+  if (isVertical) {
+    if (from.y <= to.y) {
+      x1 = from.x; y1 = from.bottom;
+      x2 = to.x;   y2 = to.top;
+    } else {
+      x1 = from.x; y1 = from.top;
+      x2 = to.x;   y2 = to.bottom;
+    }
+    const dy = y2 - y1;
+    c1x = x1; c1y = y1 + dy * 0.5;
+    c2x = x2; c2y = y1 + dy * 0.5;
+  } else {
+    const dir = from.x < to.x ? 1 : -1;
+    const EW  = 65;
+    x1 = from.x + dir * EW;
+    y1 = from.y;
+    x2 = to.x   - dir * EW;
+    y2 = to.y;
+    const dx = x2 - x1;
+    c1x = x1 + dx * 0.5; c1y = y1;
+    c2x = x1 + dx * 0.5; c2y = y2;
+  }
+  return { isVertical, x1, y1, x2, y2, c1x, c1y, c2x, c2y };
+}
+
+// Greedy word-wrap for canvas text, since fillText doesn't wrap on its own.
+function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (current && ctx.measureText(test).width > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [text];
+}
+
+// ── Cutting points (year compression) ──
+// A "cut" hides the years between startYear/endYear of the cut, replacing
+// them with a fixed-width visual break ("/ /"). The functions below remap
+// year <-> x% so every other piece of math (ticks, columns, trends, events)
+// stays in plain percentage terms and only needs to call through here.
+const CUT_GAP_PCT = 2.2; // width (in % of the timeline) reserved for each break
+
+function sortedCuts(cuts: Cut[]) {
+  return [...cuts].sort((a, b) => a.startYear - b.startYear);
+}
+
+function yearToXWithCuts(year: number, startYear: number, endYear: number, cuts: Cut[]) {
+  const cs = sortedCuts(cuts);
+  const totalCutSpan = cs.reduce((sum, c) => sum + (c.endYear - c.startYear), 0);
+  const totalGapPct  = cs.length * CUT_GAP_PCT;
+  const realSpan     = (endYear - startYear) - totalCutSpan;
+  const realPct      = 100 - totalGapPct;
+
+  let pct = 0;
+  let cursor = startYear;
+  for (const cut of cs) {
+    const segSpan = cut.startYear - cursor;
+    const segPct  = realSpan > 0 ? (segSpan / realSpan) * realPct : 0;
+    if (year <= cut.startYear) {
+      const within = segSpan > 0 ? (year - cursor) / segSpan : 0;
+      return pct + within * segPct;
+    }
+    pct += segPct;
+    if (year < cut.endYear) return pct + CUT_GAP_PCT / 2; // inside the cut itself
+    pct += CUT_GAP_PCT;
+    cursor = cut.endYear;
+  }
+  const segSpan = endYear - cursor;
+  const segPct  = realSpan > 0 ? (segSpan / realSpan) * realPct : 0;
+  const within  = segSpan > 0 ? (year - cursor) / segSpan : 0;
+  return pct + within * segPct;
+}
+
+function xToYearWithCuts(xPercent: number, startYear: number, endYear: number, cuts: Cut[]) {
+  const cs = sortedCuts(cuts);
+  const totalCutSpan = cs.reduce((sum, c) => sum + (c.endYear - c.startYear), 0);
+  const totalGapPct  = cs.length * CUT_GAP_PCT;
+  const realSpan     = (endYear - startYear) - totalCutSpan;
+  const realPct      = 100 - totalGapPct;
+
+  let pct = 0;
+  let cursor = startYear;
+  for (const cut of cs) {
+    const segSpan = cut.startYear - cursor;
+    const segPct  = realSpan > 0 ? (segSpan / realSpan) * realPct : 0;
+    if (xPercent <= pct + segPct) {
+      const within = segPct > 0 ? (xPercent - pct) / segPct : 0;
+      return cursor + within * segSpan;
+    }
+    pct += segPct;
+    if (xPercent <= pct + CUT_GAP_PCT) {
+      return (xPercent - pct) < CUT_GAP_PCT / 2 ? cut.startYear : cut.endYear;
+    }
+    pct += CUT_GAP_PCT;
+    cursor = cut.endYear;
+  }
+  const segSpan = endYear - cursor;
+  const segPct  = realSpan > 0 ? (segSpan / realSpan) * realPct : 0;
+  const within  = segPct > 0 ? (xPercent - pct) / segPct : 0;
+  return cursor + within * segSpan;
+}
+
+// Converts an event's stored year-fraction (0–100) into a CSS left position
+// that's inset by EVENT_EDGE_PADDING px on both sides of the timeline, so
+// events at the start/end years are never flush against the edges.
+function eventLeft(xPercent: number) {
+  return `calc(${EVENT_EDGE_PADDING}px + (100% - ${EVENT_EDGE_PADDING * 2}px) * ${xPercent / 100})`;
+}
+
+// Pixel equivalent of eventLeft(), for SVG connector lines and PNG export
+// where we need an actual number rather than a CSS calc() string.
+function eventLeftPx(xPercent: number, wrapWidthPx: number) {
+  return EVENT_EDGE_PADDING + (wrapWidthPx - EVENT_EDGE_PADDING * 2) * (xPercent / 100);
+}
+
+function clampYOffset(y: number, layerHeight: number) {
+  return Math.min(layerHeight - EVENT_BOTTOM_MARGIN, Math.max(EVENT_TOP_MARGIN, y));
 }
 
 // ── Sub-components ──
@@ -83,13 +243,14 @@ const LayerModal = ({ onClose, onSave }: { onClose: () => void; onSave: (name: s
 };
 
 const EventModal = ({
-  onClose, onSave, layers, startYear, endYear, initialData
+  onClose, onSave, layers, startYear, endYear, yearToPct, initialData
 }: {
   onClose: () => void;
   onSave: (data: TimelineEvent) => void;
   layers: string[];
   startYear: number;
   endYear: number;
+  yearToPct: (year: number) => number;
   initialData?: Partial<TimelineEvent>;
 }) => {
   const midYear = Math.round((startYear + endYear) / 2);
@@ -102,8 +263,9 @@ const EventModal = ({
 
   const handleSave = () => {
     if (!label.trim()) return;
-    const x = ((year - startYear) / (endYear - startYear)) * 100;
-    onSave({ label: label.trim(), year, layer, x, color, borderColor, style });
+    const x = yearToPct(year);
+    const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
+    onSave({ label: label.trim(), year, layer, x, yOffset, color, borderColor, style });
   };
 
   return (
@@ -151,19 +313,21 @@ const EventModal = ({
 };
 
 const ColumnModal = ({
-  onClose, onSave, startYear, endYear
+  onClose, onSave, startYear, endYear, initialData
 }: {
   onClose: () => void;
   onSave: (data: Column) => void;
   startYear: number;
   endYear: number;
+  initialData?: Column;
 }) => {
-  const [label, setLabel]       = useState('');
-  const [colStart, setColStart] = useState(startYear);
-  const [colEnd, setColEnd]     = useState(endYear);
+  const [label, setLabel]       = useState(initialData?.label ?? '');
+  const [colStart, setColStart] = useState(initialData?.startYear ?? startYear);
+  const [colEnd, setColEnd]     = useState(initialData?.endYear ?? endYear);
+  const isEditing = !!initialData;
 
   return (
-    <Modal onClose={onClose} title="Add Column Annotation" accentColor="var(--btn-column)">
+    <Modal onClose={onClose} title={isEditing ? 'Edit Column Annotation' : 'Add Column Annotation'} accentColor="var(--btn-column)">
       <div className="u-form-group">
         <label className="u-form-label">Label</label>
         <input className="u-form-input" type="text" placeholder="Phase or period name"
@@ -181,27 +345,29 @@ const ColumnModal = ({
       </div>
       <button className="u-btn u-btn--column u-btn--full" onClick={() => label.trim() && onSave({ label: label.trim(), startYear: colStart, endYear: colEnd })}
         disabled={!label.trim()}>
-        Add Column
+        {isEditing ? 'Save Column' : 'Add Column'}
       </button>
     </Modal>
   );
 };
 
 const TrendModal = ({
-  onClose, onSave, startYear, endYear
+  onClose, onSave, startYear, endYear, initialData
 }: {
   onClose: () => void;
   onSave: (data: Trend) => void;
   startYear: number;
   endYear: number;
+  initialData?: Trend;
 }) => {
-  const [label, setLabel]           = useState('');
-  const [trendStart, setTrendStart] = useState(startYear);
-  const [trendEnd, setTrendEnd]     = useState(endYear);
-  const [color, setColor]           = useState('#8C6E45');
+  const [label, setLabel]           = useState(initialData?.label     ?? '');
+  const [trendStart, setTrendStart] = useState(initialData?.startYear ?? startYear);
+  const [trendEnd, setTrendEnd]     = useState(initialData?.endYear   ?? endYear);
+  const [color, setColor]           = useState(initialData?.color     ?? '#8C6E45');
+  const isEditing = !!initialData;
 
   return (
-    <Modal onClose={onClose} title="Add Trend Band" accentColor="var(--btn-trend)">
+    <Modal onClose={onClose} title={isEditing ? 'Edit Trend Band' : 'Add Trend Band'} accentColor="var(--btn-trend)">
       <div className="u-form-group">
         <label className="u-form-label">Label</label>
         <input className="u-form-input" type="text" placeholder="Sustained condition or pressure"
@@ -224,27 +390,29 @@ const TrendModal = ({
       <button className="u-btn u-btn--trend u-btn--full"
         onClick={() => label.trim() && onSave({ label: label.trim(), startYear: trendStart, endYear: trendEnd, color })}
         disabled={!label.trim()}>
-        Add Trend
+        {isEditing ? 'Save Trend' : 'Add Trend'}
       </button>
     </Modal>
   );
 };
 
 const ConnectionModal = ({
-  onClose, onSave, from, to
+  onClose, onSave, from, to, initialData
 }: {
   onClose: () => void;
   onSave: (data: Connection) => void;
   from: number;
   to: number;
+  initialData?: Connection;
 }) => {
-  const [color, setColor]         = useState('#3F5E78');
-  const [lineStyle, setLineStyle] = useState<'solid'|'dashed'|'dotted'>('solid');
-  const [width, setWidth]         = useState(2);
-  const [showArrow, setShowArrow] = useState(true);
+  const [color, setColor]         = useState(initialData?.color ?? '#3F5E78');
+  const [lineStyle, setLineStyle] = useState<'solid'|'dashed'|'dotted'>(initialData?.lineStyle ?? 'solid');
+  const [width, setWidth]         = useState(initialData?.width ?? 2);
+  const [showArrow, setShowArrow] = useState(initialData?.showArrow ?? true);
+  const isEditing = !!initialData;
 
   return (
-    <Modal onClose={onClose} title="Connection Settings" accentColor="var(--primary)">
+    <Modal onClose={onClose} title={isEditing ? 'Edit Connection' : 'Connection Settings'} accentColor="var(--primary)">
       <div className="u-form-group">
         <label className="u-form-label">Line Color</label>
         <input className="u-form-color" type="color" value={color} onChange={e => setColor(e.target.value)} />
@@ -270,7 +438,58 @@ const ConnectionModal = ({
       </div>
       <button className="u-btn u-btn--primary u-btn--full"
         onClick={() => onSave({ from, to, color, lineStyle, width, showArrow })}>
-        Create Connection
+        {isEditing ? 'Save Connection' : 'Create Connection'}
+      </button>
+    </Modal>
+  );
+};
+
+const CutModal = ({
+  onClose, onSave, startYear, endYear, events, initialData
+}: {
+  onClose: () => void;
+  onSave: (data: Cut) => void;
+  startYear: number;
+  endYear: number;
+  events: TimelineEvent[];
+  initialData?: Cut;
+}) => {
+  const [cutStart, setCutStart] = useState(initialData?.startYear ?? startYear + 1);
+  const [cutEnd, setCutEnd]     = useState(initialData?.endYear   ?? endYear - 1);
+  const isEditing = !!initialData;
+
+  const hasEventsInRange = events.some(e => e.year > cutStart && e.year < cutEnd);
+  const validRange = cutEnd > cutStart && cutStart > startYear && cutEnd < endYear;
+
+  const handleSave = () => {
+    if (!validRange) { alert('The cut range must fall strictly between the start and end years, with the end after the start.'); return; }
+    if (hasEventsInRange) { alert('There are events inside this year range. Move or remove them before adding a cutting point here.'); return; }
+    onSave({ startYear: cutStart, endYear: cutEnd });
+  };
+
+  return (
+    <Modal onClose={onClose} title={isEditing ? 'Edit Cutting Point' : 'Add Cutting Point'} accentColor="var(--btn-cut)">
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 0 }}>
+        Compresses a span of years with no events into a single break, shown as <strong>// </strong>
+        on the axis.
+      </p>
+      <div className="u-form-row">
+        <div className="u-form-group">
+          <label className="u-form-label">From Year (exclusive)</label>
+          <input className="u-form-input" type="number" value={cutStart} onChange={e => setCutStart(Number(e.target.value))} />
+        </div>
+        <div className="u-form-group">
+          <label className="u-form-label">To Year (exclusive)</label>
+          <input className="u-form-input" type="number" value={cutEnd} onChange={e => setCutEnd(Number(e.target.value))} />
+        </div>
+      </div>
+      {hasEventsInRange && (
+        <p style={{ fontSize: '0.78rem', color: 'var(--danger)' }}>
+          This range contains existing events — move or remove them first.
+        </p>
+      )}
+      <button className="u-btn u-btn--cut u-btn--full" onClick={handleSave} disabled={!validRange}>
+        {isEditing ? 'Save Cut' : 'Add Cut'}
       </button>
     </Modal>
   );
@@ -285,6 +504,9 @@ const ComplexityTimeline = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [columns, setColumns]         = useState<Column[]>([]);
   const [trends, setTrends]           = useState<Trend[]>([]);
+  const [cuts, setCuts]               = useState<Cut[]>([]);
+  const [canvasWidth, setCanvasWidth] = useState(CANVAS_WIDTH_INIT);
+  const [layerHeight, setLayerHeight] = useState(LAYER_HEIGHT_DEFAULT);
 
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
   const [connectingFrom, setConnectingFrom]   = useState<number | null>(null);
@@ -292,17 +514,46 @@ const ComplexityTimeline = () => {
   const [editingEvent, setEditingEvent]       = useState<number | null>(null);
   const [pendingConnection, setPendingConnection] = useState<{ from: number; to: number } | null>(null);
 
+  const [selectedColumn, setSelectedColumn]   = useState<number | null>(null);
+  const [editingColumn, setEditingColumn]     = useState<number | null>(null);
+
+  const [selectedTrend, setSelectedTrend]     = useState<number | null>(null);
+  const [editingTrend, setEditingTrend]       = useState<number | null>(null);
+
+  const [selectedConnection, setSelectedConnection] = useState<number | null>(null);
+  const [editingConnection, setEditingConnection]   = useState<number | null>(null);
+
+  const [selectedCut, setSelectedCut]         = useState<number | null>(null);
+  const [editingCut, setEditingCut]           = useState<number | null>(null);
+
   const [showLayerModal, setShowLayerModal]       = useState(false);
   const [showEventModal, setShowEventModal]       = useState<boolean | Partial<TimelineEvent>>(false);
   const [showColumnModal, setShowColumnModal]     = useState(false);
   const [showTrendModal, setShowTrendModal]       = useState(false);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [showCutModal, setShowCutModal]           = useState(false);
   const [showExportMenu, setShowExportMenu]       = useState(false);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const svgRef      = useRef<SVGSVGElement>(null);
 
-  const timelineHeight = layers.length > 0 ? layers.length * LAYER_HEIGHT + 48 : 280;
+  const timelineHeight = layers.length > 0 ? layers.length * layerHeight + 48 : 280;
+
+  // ── Cut-aware year ↔ percentage conversion, memoized against current scale ──
+  const yearToPct = useCallback(
+    (year: number) => yearToXWithCuts(year, startYear, endYear, cuts),
+    [startYear, endYear, cuts]
+  );
+  const pctToYear = useCallback(
+    (pct: number) => xToYearWithCuts(pct, startYear, endYear, cuts),
+    [startYear, endYear, cuts]
+  );
+
+  // Keep cached event.x positions correct when the scale (start/end year or
+  // cuts) changes after events have already been placed.
+  useEffect(() => {
+    setEvents(ev => ev.map(e => ({ ...e, x: yearToXWithCuts(e.year, startYear, endYear, cuts) })));
+  }, [startYear, endYear, cuts]);
 
   // ── Escape key ──
   useEffect(() => {
@@ -316,11 +567,34 @@ const ComplexityTimeline = () => {
         setShowColumnModal(false);
         setShowTrendModal(false);
         setShowConnectionModal(false);
+        setShowCutModal(false);
         setShowExportMenu(false);
+        setSelectedColumn(null);
+        setEditingColumn(null);
+        setSelectedTrend(null);
+        setEditingTrend(null);
+        setSelectedConnection(null);
+        setEditingConnection(null);
+        setSelectedCut(null);
+        setEditingCut(null);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // ── Canvas width (manual + auto-expand) ──
+  // Grows the canvas automatically when something is placed near the current
+  // right edge, so the "endless" canvas never clips content. Users can also
+  // resize it directly with the toolbar slider.
+  const maybeGrowCanvas = useCallback((xPercent: number) => {
+    setCanvasWidth(w => {
+      const xPixel = (xPercent / 100) * w;
+      if (xPixel > w - CANVAS_EDGE_MARGIN) {
+        return Math.min(CANVAS_WIDTH_MAX, w + CANVAS_GROWTH_STEP);
+      }
+      return w;
+    });
   }, []);
 
   // ── Layer ops ──
@@ -338,6 +612,7 @@ const ComplexityTimeline = () => {
     } else {
       setEvents(ev => [...ev, data]);
     }
+    maybeGrowCanvas(data.x);
     setShowEventModal(false);
     setSelectedEvent(null);
   };
@@ -350,34 +625,90 @@ const ComplexityTimeline = () => {
 
   // ── Connection ops ──
   const addConnection = (data: Connection) => {
-    setConnections(conn => [...conn, data]);
+    if (editingConnection !== null) {
+      setConnections(conn => conn.map((c, i) => i === editingConnection ? data : c));
+      setEditingConnection(null);
+    } else {
+      setConnections(conn => [...conn, data]);
+    }
     setShowConnectionModal(false);
     setPendingConnection(null);
+    setSelectedConnection(null);
+  };
+  const deleteConnection = (i: number) => {
+    setConnections(conn => conn.filter((_, idx) => idx !== i));
+    setSelectedConnection(null);
   };
 
   // ── Column / Trend ops ──
-  const addColumn = (data: Column) => { setColumns(c => [...c, data]); setShowColumnModal(false); };
+  const addColumn = (data: Column) => {
+    if (editingColumn !== null) {
+      setColumns(c => c.map((col, i) => i === editingColumn ? data : col));
+      setEditingColumn(null);
+    } else {
+      setColumns(c => [...c, data]);
+    }
+    maybeGrowCanvas(yearToPct(data.endYear));
+    setShowColumnModal(false);
+    setSelectedColumn(null);
+  };
+  const deleteColumn = (i: number) => {
+    setColumns(c => c.filter((_, idx) => idx !== i));
+    setSelectedColumn(null);
+  };
   const addTrend  = (data: Trend)  => {
-    if (trends.length >= 4) { alert('Maximum of 4 trend bands allowed.'); return; }
-    setTrends(t => [...t, data]);
+    if (editingTrend !== null) {
+      setTrends(t => t.map((tr, i) => i === editingTrend ? data : tr));
+      setEditingTrend(null);
+    } else {
+      if (trends.length >= 4) { alert('Maximum of 4 trend bands allowed.'); return; }
+      setTrends(t => [...t, data]);
+    }
+    maybeGrowCanvas(yearToPct(data.endYear));
     setShowTrendModal(false);
+    setSelectedTrend(null);
+  };
+  const deleteTrend = (i: number) => {
+    setTrends(t => t.filter((_, idx) => idx !== i));
+    setSelectedTrend(null);
+  };
+
+  // ── Cut ops ──
+  const addCut = (data: Cut) => {
+    if (editingCut !== null) {
+      setCuts(c => c.map((cut, i) => i === editingCut ? data : cut));
+      setEditingCut(null);
+    } else {
+      setCuts(c => [...c, data]);
+    }
+    setShowCutModal(false);
+    setSelectedCut(null);
+  };
+  const deleteCut = (i: number) => {
+    setCuts(c => c.filter((_, idx) => idx !== i));
+    setSelectedCut(null);
   };
 
   // ── Timeline click ──
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('.u-event-node')) return;
     setSelectedEvent(null);
+    setSelectedColumn(null);
+    setSelectedTrend(null);
+    setSelectedConnection(null);
+    setSelectedCut(null);
     if (connectingFrom !== null) { setConnectingFrom(null); return; }
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x    = ((e.clientX - rect.left) / rect.width) * 100;
     const y    = e.clientY - rect.top;
-    const layer = Math.floor(y / LAYER_HEIGHT);
+    const layer = Math.floor(y / layerHeight);
     if (layer < 0 || layer >= layers.length) return;
-    const year = Math.round(startYear + (x / 100) * (endYear - startYear));
+    const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
+    const year = Math.round(pctToYear(x));
     setEditingEvent(null);
-    setShowEventModal({ x, year, layer });
-  }, [connectingFrom, layers.length, startYear, endYear]);
+    setShowEventModal({ x, year, layer, yOffset });
+  }, [connectingFrom, layers.length, layerHeight, pctToYear]);
 
   // ── Event click ──
   const handleEventClick = (e: React.MouseEvent, i: number) => {
@@ -403,27 +734,41 @@ const ComplexityTimeline = () => {
     const rect  = timelineRef.current.getBoundingClientRect();
     const x     = ((e.clientX - rect.left) / rect.width) * 100;
     const y     = e.clientY - rect.top;
-    const layer = Math.floor(y / LAYER_HEIGHT);
+    const layer = Math.floor(y / layerHeight);
     if (layer < 0 || layer >= layers.length) return;
-    const year = Math.round(startYear + (x / 100) * (endYear - startYear));
-    setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer } : evt));
+    const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
+    const year = Math.round(pctToYear(x));
+    setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
+    maybeGrowCanvas(x);
     setDraggingEvent(null);
   };
 
   // ── SVG connection positions ──
   const getEventPos = useCallback((i: number) => {
     const ev   = events[i];
-    if (!ev || !timelineRef.current) return { x: 0, y: 0 };
+    if (!ev || !timelineRef.current) return { x: 0, y: 0, top: 0, bottom: 0 };
     const rect = timelineRef.current.getBoundingClientRect();
+    const centerY = ev.layer * layerHeight + ev.yOffset + EVENT_CARD_HALF_HEIGHT;
     return {
-      x: (ev.x / 100) * rect.width,
-      y: ev.layer * LAYER_HEIGHT + 60,
+      x: eventLeftPx(ev.x, rect.width),
+      y: centerY,
+      top: centerY - EVENT_CARD_HALF_HEIGHT,
+      bottom: centerY + EVENT_CARD_HALF_HEIGHT,
     };
-  }, [events]);
+  }, [events, layerHeight]);
 
-  // ── Export ──
+  // ── Export / Import ──
+  // version bumped whenever the saved-data shape changes, so importJSON can
+  // reason about older files (e.g. ones missing layerHeight/canvasWidth).
+  const TIMELINE_FILE_VERSION = 2;
+
   const exportJSON = () => {
-    const data = { layers, startYear, endYear, events, connections, columns, trends };
+    const data = {
+      version: TIMELINE_FILE_VERSION,
+      layers, startYear, endYear,
+      events, connections, columns, trends, cuts,
+      layerHeight, canvasWidth,
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -432,8 +777,60 @@ const ComplexityTimeline = () => {
     URL.revokeObjectURL(a.href);
   };
 
-  const exportPNG = () => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerImportJSON = () => fileInputRef.current?.click();
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        if (!data || typeof data !== 'object' || !Array.isArray(data.layers)) {
+          alert('This file doesn\'t look like an Understory timeline export.');
+          return;
+        }
+        setLayers(data.layers ?? []);
+        setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
+        setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
+        setEvents(Array.isArray(data.events) ? data.events : []);
+        setConnections(Array.isArray(data.connections) ? data.connections : []);
+        setColumns(Array.isArray(data.columns) ? data.columns : []);
+        setTrends(Array.isArray(data.trends) ? data.trends : []);
+        setCuts(Array.isArray(data.cuts) ? data.cuts : []);
+        setLayerHeight(typeof data.layerHeight === 'number' ? data.layerHeight : LAYER_HEIGHT_DEFAULT);
+        setCanvasWidth(typeof data.canvasWidth === 'number' ? data.canvasWidth : CANVAS_WIDTH_INIT);
+        // Clear any in-progress selection/edit state from the timeline we're replacing.
+        setSelectedEvent(null);
+        setSelectedTrend(null);
+        setSelectedConnection(null);
+        setSelectedCut(null);
+        setConnectingFrom(null);
+      } catch {
+        alert('Couldn\'t read that file — make sure it\'s a JSON export from Understory.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const exportPNG = async () => {
     if (!timelineRef.current) return;
+
+    // Make sure "Alegreya Sans" (regular, 500 weight, italic) is fully
+    // loaded before we draw any text — otherwise canvas silently falls
+    // back to a default font on the first export.
+    try {
+      await Promise.all([
+        document.fonts.load('10px "Alegreya Sans"'),
+        document.fonts.load('500 10px "Alegreya Sans"'),
+        document.fonts.load('italic 10px "Alegreya Sans"'),
+      ]);
+      await document.fonts.ready;
+    } catch { /* best effort — fall through and export anyway */ }
+
     const rect  = timelineRef.current.getBoundingClientRect();
     const scale = 2;
     const canvas = document.createElement('canvas');
@@ -445,43 +842,102 @@ const ComplexityTimeline = () => {
     ctx.fillRect(0, 0, rect.width, rect.height);
     const span = endYear - startYear;
 
+    // ── Connections (drawn first, to match the live DOM stacking order
+    // where the SVG overlay sits behind columns/layers/events) ──
+    connections.forEach(conn => {
+      const from = getEventPos(conn.from);
+      const to   = getEventPos(conn.to);
+      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to);
+
+      ctx.save();
+      ctx.strokeStyle = conn.color;
+      ctx.lineWidth   = conn.width;
+      ctx.setLineDash(
+        conn.lineStyle === 'dashed' ? [6, 4] :
+        conn.lineStyle === 'dotted' ? [2, 4] : []
+      );
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2);
+      ctx.stroke();
+      ctx.restore();
+
+      if (conn.showArrow) {
+        const angle = Math.atan2(y2 - c2y, x2 - c2x);
+        const size  = 8;
+        ctx.save();
+        ctx.fillStyle = conn.color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - size * Math.cos(angle - Math.PI / 6), y2 - size * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(x2 - size * Math.cos(angle + Math.PI / 6), y2 - size * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+
     columns.forEach(col => {
-      const x = ((col.startYear - startYear) / span) * rect.width;
-      const w = ((col.endYear   - col.startYear) / span) * rect.width;
+      const x = (yearToPct(col.startYear) / 100) * rect.width;
+      const w = (yearToPct(col.endYear)   / 100) * rect.width - x;
       ctx.fillStyle   = 'rgba(62,59,53,0.04)';
       ctx.fillRect(x, 0, w, rect.height);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)';
       ctx.strokeRect(x, 0, w, rect.height);
       ctx.fillStyle = '#6b6760';
-      ctx.font = '10px Alegreya Sans, sans-serif';
+      ctx.font = '10px "Alegreya Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(col.label, x + w / 2, 18);
     });
 
     layers.forEach((lyr, i) => {
-      const y = i * LAYER_HEIGHT;
+      const y = i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(rect.width, y); ctx.stroke();
       ctx.fillStyle = '#6b6760';
-      ctx.font = '500 10px Alegreya Sans, sans-serif';
+      ctx.font = '500 10px "Alegreya Sans", sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(lyr, 10, y + 14);
     });
 
+    cuts.forEach(cut => {
+      const x = (yearToPct((cut.startYear + cut.endYear) / 2) / 100) * rect.width;
+      ctx.strokeStyle = '#3E3B35';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 5, rect.height); ctx.lineTo(x - 1, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 1, rect.height); ctx.lineTo(x + 5, 0); ctx.stroke();
+    });
+
     events.forEach(ev => {
-      const x = (ev.x / 100) * rect.width;
-      const y = ev.layer * LAYER_HEIGHT + 20;
-      const bw = 110, bh = 36;
+      const x = eventLeftPx(ev.x, rect.width);
+      const y = ev.layer * layerHeight + ev.yOffset;
+      const bw = 110;
+      const padding    = 6;
+      const lineHeight = 13;
+      const fontSpec   = (ev.style === 'italic' ? 'italic ' : '') + '12px "Alegreya Sans", sans-serif';
+      ctx.font = fontSpec;
+      const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
+      const contentHeight = lines.length * lineHeight + padding * 2;
+      const bh = Math.max(36, contentHeight);
+      const centerY = y + EVENT_CARD_HALF_HEIGHT; // matches getEventPos anchor
+      const boxTop  = centerY - bh / 2;
+
       ctx.fillStyle   = ev.color;
       ctx.strokeStyle = ev.borderColor;
       ctx.lineWidth   = 2;
-      ctx.fillRect(x - bw / 2, y, bw, bh);
-      ctx.strokeRect(x - bw / 2, y, bw, bh);
-      ctx.fillStyle = '#3E3B35';
-      ctx.font = (ev.style === 'italic' ? 'italic ' : '') + '10px Alegreya Sans, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(ev.label, x, y + 22, bw - 8);
+      ctx.fillRect(x - bw / 2, boxTop, bw, bh);
+      ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
+
+      ctx.fillStyle    = '#3E3B35';
+      ctx.font          = fontSpec;
+      ctx.textAlign     = 'center';
+      ctx.textBaseline  = 'middle';
+      const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
+      lines.forEach((line, li) => {
+        ctx.fillText(line, x, textStartY + li * lineHeight);
+      });
+      ctx.textBaseline = 'alphabetic';
     });
 
     const step = span <= 20 ? 2 : 5;
@@ -490,11 +946,12 @@ const ComplexityTimeline = () => {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(rect.width, axY); ctx.stroke();
     for (let yr = startYear; yr <= endYear; yr += step) {
-      const x = ((yr - startYear) / span) * rect.width;
+      if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
+      const x = (yearToPct(yr) / 100) * rect.width;
       ctx.strokeStyle = '#8A867E';
       ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
       ctx.fillStyle = '#6b6760';
-      ctx.font = '10px Alegreya Sans, sans-serif';
+      ctx.font = '10px "Alegreya Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(yr.toString(), x, axY + 18);
     }
@@ -509,8 +966,25 @@ const ComplexityTimeline = () => {
   };
 
   // ── Year axis tick step ──
+  // Always includes both startYear and endYear, even when endYear doesn't
+  // fall on an even multiple of tickStep.
   const yearSpan = endYear - startYear;
   const tickStep = yearSpan <= 20 ? 2 : yearSpan <= 40 ? 5 : 10;
+  const yearTicks: number[] = [];
+  if (yearSpan > 0) {
+    for (let yr = startYear; yr < endYear; yr += tickStep) {
+      // Skip ticks that fall inside a compressed (cut) range — those years
+      // aren't actually shown on the axis.
+      if (!cuts.some(c => yr > c.startYear && yr < c.endYear)) yearTicks.push(yr);
+    }
+  }
+  yearTicks.push(endYear);
+  // Always mark the boundary years of each cut, so the break reads clearly.
+  cuts.forEach(c => {
+    if (!yearTicks.includes(c.startYear)) yearTicks.push(c.startYear);
+    if (!yearTicks.includes(c.endYear))   yearTicks.push(c.endYear);
+  });
+  yearTicks.sort((a, b) => a - b);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -540,12 +1014,15 @@ const ComplexityTimeline = () => {
         <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal(true); }}>
           <Plus size={13} /> Add Event
         </button>
-        <button className="u-btn u-btn--column" onClick={() => setShowColumnModal(true)}>
+        <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
           <Columns size={13} /> Add Column
         </button>
-        <button className="u-btn u-btn--trend" onClick={() => setShowTrendModal(true)}>
+        <button className="u-btn u-btn--trend" onClick={() => { setEditingTrend(null); setShowTrendModal(true); }}>
           <TrendingUp size={13} /> Add Trend
           <span style={{ fontSize: '0.65rem', opacity: 0.75 }}>({trends.length}/4)</span>
+        </button>
+        <button className="u-btn u-btn--cut" onClick={() => { setEditingCut(null); setShowCutModal(true); }}>
+          <Scissors size={13} /> Add Cut
         </button>
 
         <div className="u-toolbar-sep" />
@@ -558,8 +1035,16 @@ const ComplexityTimeline = () => {
             <div className="u-export-menu">
               <button onClick={() => { exportJSON(); setShowExportMenu(false); }}>Save as JSON</button>
               <button onClick={() => { exportPNG();  setShowExportMenu(false); }}>Export as PNG</button>
+              <button onClick={() => { triggerImportJSON(); setShowExportMenu(false); }}>Load JSON…</button>
             </div>
           )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImportFile}
+            style={{ display: 'none' }}
+          />
         </div>
 
         {connectingFrom !== null && (
@@ -568,26 +1053,68 @@ const ComplexityTimeline = () => {
           </div>
         )}
 
-        <div className="u-year-controls">
-          <span className="u-year-label">From</span>
-          <input className="u-year-input" type="number" value={startYear}
-            onChange={e => setStartYear(Number(e.target.value))} />
-          <span className="u-year-label">To</span>
-          <input className="u-year-input" type="number" value={endYear}
-            onChange={e => setEndYear(Number(e.target.value))} />
+        <div className="u-toolbar-right">
+          <div className="u-width-controls">
+            <span className="u-year-label">Width</span>
+            <input className="u-width-slider" type="range"
+              min={CANVAS_WIDTH_MIN} max={Math.max(CANVAS_WIDTH_MAX, canvasWidth)} step={50}
+              value={canvasWidth}
+              onChange={e => setCanvasWidth(Number(e.target.value))}
+              title="Canvas width — drag to spread events out or pack them in" />
+            <span className="u-width-value">{canvasWidth}px</span>
+          </div>
+
+          <div className="u-width-controls">
+            <span className="u-year-label">Height</span>
+            <input className="u-width-slider" type="range"
+              min={LAYER_HEIGHT_MIN} max={LAYER_HEIGHT_MAX} step={10}
+              value={layerHeight}
+              onChange={e => setLayerHeight(Number(e.target.value))}
+              title="Row height — drag to give events more or less vertical room" />
+            <span className="u-width-value">{layerHeight}px</span>
+          </div>
+
+          <div className="u-year-controls">
+            <span className="u-year-label">From</span>
+            <input className="u-year-input" type="number" value={startYear}
+              onChange={e => setStartYear(Number(e.target.value))} />
+            <span className="u-year-label">To</span>
+            <input className="u-year-input" type="number" value={endYear}
+              onChange={e => setEndYear(Number(e.target.value))} />
+          </div>
         </div>
       </div>
 
       {/* CANVAS */}
       <div className="u-canvas-area">
-        <div
-          ref={timelineRef}
-          className="u-timeline-wrap"
-          style={{ height: timelineHeight }}
-          onClick={handleTimelineClick}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
+        <div className="u-canvas-row" style={{ height: timelineHeight }}>
+          {/* Sticky layer-title gutter — stays pinned during horizontal scroll,
+              so titles never overlap events near the start date. */}
+          {layers.length > 0 && (
+            <div className="u-layer-gutter" style={{ height: timelineHeight }}>
+              {layers.map((layer, i) => (
+                <div key={i} className="u-layer-gutter-row" style={{ top: i * layerHeight, height: layerHeight }}>
+                  <div className="u-layer-label">
+                    {layer}
+                    <button className="u-layer-remove"
+                      onClick={() => removeLayer(i)}
+                      title="Remove layer">
+                      <X size={11} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div
+            ref={timelineRef}
+            className="u-timeline-wrap"
+            style={{ height: timelineHeight, width: layers.length > 0 ? canvasWidth : undefined }}
+            onClick={handleTimelineClick}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
           {layers.length === 0 ? (
             <div className="u-empty">
               <h2>Begin your timeline</h2>
@@ -612,57 +1139,134 @@ const ComplexityTimeline = () => {
                 {connections.map((conn, i) => {
                   const from = getEventPos(conn.from);
                   const to   = getEventPos(conn.to);
-                  const dir  = from.x < to.x ? 1 : -1;
-                  const EW   = 65;
-                  const x1   = from.x + dir * EW;
-                  const x2   = to.x   - dir * EW;
-                  const dx   = x2 - x1;
-                  const path = `M ${x1} ${from.y} C ${x1 + dx * 0.5} ${from.y}, ${x1 + dx * 0.5} ${to.y}, ${x2} ${to.y}`;
+                  const dxRaw = to.x - from.x;
+                  const dyRaw = to.y - from.y;
+                  // When two events sit roughly one above the other, anchor
+                  // the line to the bottom of the higher card and the top of
+                  // the lower one, instead of cutting in from the side.
+                  const isVertical = Math.abs(dxRaw) < Math.abs(dyRaw);
+                  let x1: number, y1: number, x2: number, y2: number, path: string;
+                  if (isVertical) {
+                    if (from.y <= to.y) {
+                      x1 = from.x; y1 = from.bottom;
+                      x2 = to.x;   y2 = to.top;
+                    } else {
+                      x1 = from.x; y1 = from.top;
+                      x2 = to.x;   y2 = to.bottom;
+                    }
+                    const dy = y2 - y1;
+                    path = `M ${x1} ${y1} C ${x1} ${y1 + dy * 0.5}, ${x2} ${y1 + dy * 0.5}, ${x2} ${y2}`;
+                  } else {
+                    const dir = from.x < to.x ? 1 : -1;
+                    const EW  = 65;
+                    x1 = from.x + dir * EW;
+                    y1 = from.y;
+                    x2 = to.x   - dir * EW;
+                    y2 = to.y;
+                    const dx = x2 - x1;
+                    path = `M ${x1} ${y1} C ${x1 + dx * 0.5} ${y1}, ${x1 + dx * 0.5} ${y2}, ${x2} ${y2}`;
+                  }
                   return (
-                    <path key={i} d={path}
-                      stroke={conn.color} strokeWidth={conn.width} fill="none"
-                      strokeDasharray={conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined}
-                      markerEnd={conn.showArrow ? `url(#arrow-${i})` : undefined}
-                    />
+                    <g key={i}>
+                      <path d={path}
+                        stroke={conn.color} strokeWidth={conn.width} fill="none"
+                        strokeDasharray={conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined}
+                        markerEnd={conn.showArrow ? `url(#arrow-${i})` : undefined}
+                      />
+                      {/* Invisible wide hit area — the SVG overlay has
+                          pointer-events: none, so we re-enable it just on
+                          this path to make the thin visible line clickable. */}
+                      <path d={path} stroke="transparent" strokeWidth={Math.max(16, conn.width + 14)} fill="none"
+                        style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                        onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }} />
+                    </g>
                   );
                 })}
               </svg>
 
-              {/* Column annotations */}
-              {columns.map((col, i) => {
-                const left  = yearToX(col.startYear, startYear, endYear);
-                const width = yearToX(col.endYear, startYear, endYear) - left;
+              {/* Connection action popups, positioned at the curve midpoint */}
+              {connections.map((conn, i) => {
+                if (selectedConnection !== i) return null;
+                const from = getEventPos(conn.from);
+                const to   = getEventPos(conn.to);
+                const isVertical = Math.abs(to.x - from.x) < Math.abs(to.y - from.y);
+                const midX = isVertical ? (from.x + to.x) / 2 : (from.x + to.x) / 2;
+                const midY = isVertical ? (from.y + to.y) / 2 : (from.y + to.y) / 2;
                 return (
-                  <div key={i} className="u-col-annotation" style={{ left: `${left}%`, width: `${width}%` }}>
-                    <div className="u-col-label">{col.label}</div>
+                  <div key={i} className="u-connection-actions" style={{ left: midX, top: midY }}>
+                    <button className="u-event-action-btn" title="Edit connection"
+                      onClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }}>
+                      <Edit2 size={13} />
+                    </button>
+                    <button className="u-event-action-btn u-event-action-btn--danger" title="Delete connection"
+                      onClick={e => { e.stopPropagation(); deleteConnection(i); }}>
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 );
               })}
 
-              {/* Layer rows */}
-              {layers.map((layer, i) => (
-                <div key={i} className="u-layer-row"
-                  style={{ top: i * LAYER_HEIGHT, height: LAYER_HEIGHT }}>
-                  <div className="u-layer-label">
-                    {layer}
-                    <button className="u-layer-remove"
-                      onClick={e => { e.stopPropagation(); removeLayer(i); }}
-                      title="Remove layer">
-                      <X size={11} />
-                    </button>
+              {/* Column annotations */}
+              {columns.map((col, i) => {
+                const left  = yearToPct(col.startYear);
+                const width = yearToPct(col.endYear) - left;
+                return (
+                  <div key={i} className="u-col-annotation" style={{ left: `${left}%`, width: `${width}%` }}>
+                    <div className="u-col-label" onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}>
+                      {col.label}
+                    </div>
+                    {selectedColumn === i && (
+                      <div className="u-col-actions">
+                        <button className="u-event-action-btn" title="Edit column"
+                          onClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="u-event-action-btn u-event-action-btn--danger" title="Delete column"
+                          onClick={e => { e.stopPropagation(); deleteColumn(i); }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
+                );
+              })}
+
+              {/* Layer row divider lines (titles live in the sticky gutter) */}
+              {layers.map((_, i) => (
+                <div key={i} className="u-layer-row"
+                  style={{ top: i * layerHeight, height: layerHeight }} />
               ))}
 
               {/* Year axis */}
               <div className="u-year-axis">
-                {Array.from({ length: Math.ceil(yearSpan / tickStep) + 1 }, (_, i) => {
-                  const yr = startYear + i * tickStep;
-                  if (yr > endYear) return null;
+                {yearTicks.map(yr => (
+                  <div key={yr} className="u-year-tick" style={{ left: `${yearToPct(yr)}%` }}>
+                    <div className="u-year-tick-mark" />
+                    <div className="u-year-tick-label">{yr}</div>
+                  </div>
+                ))}
+
+                {/* Cutting points — compressed year ranges shown as a small "// " on the axis */}
+                {cuts.map((cut, i) => {
+                  const center = yearToPct((cut.startYear + cut.endYear) / 2);
                   return (
-                    <div key={yr} className="u-year-tick" style={{ left: `${yearToX(yr, startYear, endYear)}%` }}>
-                      <div className="u-year-tick-mark" />
-                      <div className="u-year-tick-label">{yr}</div>
+                    <div key={i} className="u-cut-mark" style={{ left: `${center}%` }}
+                      onClick={e => { e.stopPropagation(); setSelectedCut(prev => prev === i ? null : i); }}
+                      title={`${cut.startYear}–${cut.endYear} compressed`}>
+                      <div className="u-cut-mark-line" />
+                      <div className="u-cut-mark-line" />
+                      {selectedCut === i && (
+                        <div className="u-cut-actions">
+                          <button className="u-event-action-btn" title="Edit cut"
+                            onClick={e => { e.stopPropagation(); setEditingCut(i); setShowCutModal(true); }}>
+                            <Edit2 size={13} />
+                          </button>
+                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete cut"
+                            onClick={e => { e.stopPropagation(); deleteCut(i); }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -670,15 +1274,28 @@ const ComplexityTimeline = () => {
 
               {/* Trend bands */}
               {trends.map((trend, i) => {
-                const left  = yearToX(trend.startYear, startYear, endYear);
-                const width = yearToX(trend.endYear, startYear, endYear) - left;
+                const left  = yearToPct(trend.startYear);
+                const width = yearToPct(trend.endYear) - left;
                 return (
                   <div key={i} className="u-trend-band" style={{
                     left: `${left}%`, width: `${width}%`,
                     bottom: `${48 + i * 22}px`, height: 20,
                     background: trend.color
-                  }}>
+                  }}
+                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}>
                     {trend.label}
+                    {selectedTrend === i && (
+                      <div className="u-trend-actions">
+                        <button className="u-event-action-btn" title="Edit trend"
+                          onClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
+                          onClick={e => { e.stopPropagation(); deleteTrend(i); }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -689,7 +1306,7 @@ const ComplexityTimeline = () => {
                   key={i}
                   draggable
                   className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
-                  style={{ left: `${event.x}%`, top: `${event.layer * LAYER_HEIGHT + 20}px` }}
+                  style={{ left: eventLeft(event.x), top: `${event.layer * layerHeight + event.yOffset}px` }}
                   onDragStart={e => handleDragStart(e, i)}
                   onClick={e => handleEventClick(e, i)}
                 >
@@ -719,6 +1336,7 @@ const ComplexityTimeline = () => {
               ))}
             </>
           )}
+          </div>
         </div>
       </div>
 
@@ -733,21 +1351,54 @@ const ComplexityTimeline = () => {
           layers={layers}
           startYear={startYear}
           endYear={endYear}
+          yearToPct={yearToPct}
           initialData={editingEvent !== null ? events[editingEvent] : (typeof showEventModal === 'object' ? showEventModal : undefined)}
         />
       )}
       {showColumnModal && (
-        <ColumnModal onClose={() => setShowColumnModal(false)} onSave={addColumn} startYear={startYear} endYear={endYear} />
+        <ColumnModal
+          onClose={() => { setShowColumnModal(false); setEditingColumn(null); }}
+          onSave={addColumn}
+          startYear={startYear}
+          endYear={endYear}
+          initialData={editingColumn !== null ? columns[editingColumn] : undefined}
+        />
       )}
       {showTrendModal && (
-        <TrendModal onClose={() => setShowTrendModal(false)} onSave={addTrend} startYear={startYear} endYear={endYear} />
+        <TrendModal
+          onClose={() => { setShowTrendModal(false); setEditingTrend(null); }}
+          onSave={addTrend}
+          startYear={startYear}
+          endYear={endYear}
+          initialData={editingTrend !== null ? trends[editingTrend] : undefined}
+        />
       )}
       {showConnectionModal && pendingConnection && (
         <ConnectionModal
-          onClose={() => { setShowConnectionModal(false); setPendingConnection(null); }}
+          onClose={() => { setShowConnectionModal(false); setPendingConnection(null); setEditingConnection(null); }}
           onSave={addConnection}
           from={pendingConnection.from}
           to={pendingConnection.to}
+          initialData={editingConnection !== null ? connections[editingConnection] : undefined}
+        />
+      )}
+      {showConnectionModal && !pendingConnection && editingConnection !== null && (
+        <ConnectionModal
+          onClose={() => { setShowConnectionModal(false); setEditingConnection(null); }}
+          onSave={addConnection}
+          from={connections[editingConnection].from}
+          to={connections[editingConnection].to}
+          initialData={connections[editingConnection]}
+        />
+      )}
+      {showCutModal && (
+        <CutModal
+          onClose={() => { setShowCutModal(false); setEditingCut(null); }}
+          onSave={addCut}
+          startYear={startYear}
+          endYear={endYear}
+          events={events}
+          initialData={editingCut !== null ? cuts[editingCut] : undefined}
         />
       )}
     </div>
