@@ -1371,8 +1371,6 @@ const ComplexityTimeline = () => {
       canvas.height = rect.height * scale;
       const ctx = canvas.getContext('2d')!;
       ctx.scale(scale, scale);
-      ctx.fillStyle = '#F6F2E7';
-      ctx.fillRect(0, 0, rect.width, rect.height);
       const span = endYear - startYear;
       if (displayMode === 'strands') drawStrandsMode(ctx, rect.width, rect.height, span, profile.fontScale);
       else drawCardsMode(ctx, rect.width, rect.height, span, profile.fontScale);
@@ -1399,10 +1397,6 @@ const ComplexityTimeline = () => {
       }
 
       const ctx = canvas.getContext('2d')!;
-      // Background fill (covers letterbox padding)
-      ctx.fillStyle = '#F6F2E7';
-      ctx.fillRect(0, 0, targetW, targetH);
-
       if (cropInstead) {
         ctx.save();
         ctx.beginPath();
