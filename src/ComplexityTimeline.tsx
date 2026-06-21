@@ -1277,7 +1277,7 @@ const ComplexityTimeline = () => {
 
     // Strand lines (one per layer)
     layers.forEach((_, i) => {
-      const y = i * layerHeight + layerHeight / 2;
+      const y = TOP_RESERVE_H + i * layerHeight + layerHeight / 2;
       ctx.save();
       ctx.strokeStyle = '#3E3B35'; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w - 10, y); ctx.stroke();
@@ -1318,7 +1318,7 @@ const ComplexityTimeline = () => {
 
     // Event labels (plain text, alternating above/below per strand)
     layers.forEach((_, layerIdx) => {
-      const strandY = layerIdx * layerHeight + layerHeight / 2;
+      const strandY = TOP_RESERVE_H + layerIdx * layerHeight + layerHeight / 2;
       const layerEvts = events
         .map((e, globalIdx) => ({ e, globalIdx }))
         .filter(({ e }) => e.layer === layerIdx);
@@ -1341,7 +1341,7 @@ const ComplexityTimeline = () => {
 
     // Layer labels (left-edge, like cards mode)
     layers.forEach((lyr, i) => {
-      const y = i * layerHeight;
+      const y = TOP_RESERVE_H + i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1356,20 +1356,23 @@ const ComplexityTimeline = () => {
       ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
     });
 
-    // Trend bars (thin, stacked, left-edge label)
-    const STRAND_BAR_H = 14; const STRAND_BAR_G = 4;
-    const sorted = [...trends].sort((a, b) => a.startYear - b.startYear);
-    sorted.forEach((trend, i) => {
-      const x = (yearToPct(trend.startYear) / 100) * w;
-      const tw = (yearToPct(trend.endYear) / 100) * w - x;
-      const ty = h - (48 + i * (STRAND_BAR_H + STRAND_BAR_G)) - STRAND_BAR_H;
-      ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = trend.color;
-      ctx.fillRect(x, ty, tw, STRAND_BAR_H); ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = scaledFont(10, fontScale);
+    // Trend bands — top register, uniform height, 30% opacity, dark label
+    const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
+    trends.forEach(trend => {
+      const x  = (yearToPct(trend.startYear) / 100) * w;
+      const tw = (yearToPct(trend.endYear)   / 100) * w - x;
+      ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
+      ctx.fillRect(x, bandTop, tw, TREND_BAND_H); ctx.restore();
+      ctx.fillStyle = darkestStop(trend.color); ctx.font = scaledFont(10, fontScale);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(trend.label, x + 4, ty + STRAND_BAR_H / 2);
+      ctx.fillText(trend.label, x + 4, bandTop + TREND_BAND_H / 2);
       ctx.textBaseline = 'alphabetic';
     });
+
+    // Separator rule
+    ctx.save(); ctx.strokeStyle = 'rgba(62,59,53,0.18)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(0, TOP_RESERVE_H); ctx.lineTo(w, TOP_RESERVE_H); ctx.stroke();
+    ctx.restore();
 
     // Year axis (same as cards mode)
     const step = span <= 20 ? 2 : 5;
