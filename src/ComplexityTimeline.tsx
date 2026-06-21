@@ -1193,7 +1193,7 @@ const ComplexityTimeline = () => {
 
     // Layer dividers + labels
     layers.forEach((lyr, i) => {
-      const y = i * layerHeight;
+      const y = TOP_RESERVE_H + i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1208,22 +1208,28 @@ const ComplexityTimeline = () => {
       ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
     });
 
-    // Trend bands
-    trends.forEach((trend, i) => {
-      const x = (yearToPct(trend.startYear) / 100) * w;
-      const tw = (yearToPct(trend.endYear) / 100) * w - x;
-      const th = 20; const ty = h - (48 + i * 22) - th;
-      ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = trend.color; ctx.fillRect(x, ty, tw, th); ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = scaledFont(11, fontScale);
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(trend.label, x + tw / 2, ty + th / 2);
+    // Trend bands — top register, uniform height, 30% opacity, dark label
+    const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
+    trends.forEach(trend => {
+      const x  = (yearToPct(trend.startYear) / 100) * w;
+      const tw = (yearToPct(trend.endYear)   / 100) * w - x;
+      ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
+      ctx.fillRect(x, bandTop, tw, TREND_BAND_H); ctx.restore();
+      ctx.fillStyle = darkestStop(trend.color); ctx.font = scaledFont(10, fontScale);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(trend.label, x + 4, bandTop + TREND_BAND_H / 2);
       ctx.textBaseline = 'alphabetic';
     });
+
+    // Separator rule
+    ctx.save(); ctx.strokeStyle = 'rgba(62,59,53,0.18)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(0, TOP_RESERVE_H); ctx.lineTo(w, TOP_RESERVE_H); ctx.stroke();
+    ctx.restore();
 
     // Events (cards)
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
-      const y = ev.layer * layerHeight + ev.yOffset;
+      const y = TOP_RESERVE_H + ev.layer * layerHeight + ev.yOffset;
       const cardEl = cardRefs.current[evi];
       const padding = 6; const lineHeight = 13;
       const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
