@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer } from 'react';
 import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
 import './understory.css';
 
@@ -820,6 +820,11 @@ const ComplexityTimeline = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // After displayMode commits (new elements mounted, cardRefs populated),
+  // re-render once so connector geometry reads the correct ref dimensions.
+  const [, forceReflow] = useReducer((x: number) => x + 1, 0);
+  useLayoutEffect(() => { forceReflow(); }, [displayMode]);
 
   // ── Canvas width (manual + auto-expand) ──
   // Grows the canvas automatically when something is placed near the current
