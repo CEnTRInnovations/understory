@@ -70,6 +70,14 @@ export function useUnderstoryDocument() {
   const importDoc = useCallback((json: string) => {
     try {
       const parsed = JSON.parse(json) as UnderstoryDocument
+      if (
+        typeof parsed.startYear !== 'number' ||
+        typeof parsed.endYear !== 'number' ||
+        !parsed.settings?.activeView
+      ) {
+        alert('Invalid document format — missing required fields (startYear, endYear, settings).')
+        return
+      }
       setDocState(parsed)
     } catch {
       alert('Invalid JSON — could not import document.')

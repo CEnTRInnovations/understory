@@ -30,9 +30,10 @@ export function InfluenceMapView({ doc, selected, onSelect }: Props) {
   function nodePos(idx: number): { x: number; y: number } {
     const col = idx % 2
     const row = Math.floor(idx / 2)
-    const colW = (width - NODE_W - 80) / 2
+    const availableW = Math.max(width - 32, NODE_W * 2 + 40)
+    const colW = (availableW - NODE_W - 40) / 2
     return {
-      x: 40 + col * (colW + H_GAP / 2),
+      x: col === 0 ? 20 : Math.min(20 + colW + H_GAP / 2, availableW - NODE_W - 20),
       y: 40 + row * (NODE_H + V_GAP) + (col === 1 ? (NODE_H + V_GAP) / 2 : 0),
     }
   }

@@ -20,6 +20,12 @@ export function TimelineView({ doc, selected, onSelect, showMinorAnchors = false
       .sort((a, b) => a.year - b.year)
   }
 
+  const allEraAnchors = new Set(sortedEras.flatMap(era => anchorsForEra(era).map(a => a.id)))
+  const uncategorized = doc.anchors.filter(a => {
+    const vis = showMinorAnchors || a.importance === 'major'
+    return vis && !allEraAnchors.has(a.id)
+  }).sort((a, b) => a.year - b.year)
+
   return (
     <div style={{ padding: 24, background: '#F2ECD7', minHeight: '100%' }}>
       <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', borderRadius: 6, overflow: 'hidden', border: '1px solid #C8B99A' }}>
@@ -81,6 +87,26 @@ export function TimelineView({ doc, selected, onSelect, showMinorAnchors = false
             </div>
           )
         })}
+        {uncategorized.length > 0 && (
+          <div style={{ flex: 0.2, background: '#F5EDD9', borderLeft: '1px solid #C8B99A', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: '#A0978D', color: '#fff', fontWeight: 700, fontSize: 12, padding: '8px 12px', textAlign: 'center', minHeight: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div>Other</div>
+            </div>
+            <div style={{ padding: '12px 10px', flex: 1 }}>
+              {uncategorized.map(anchor => {
+                const isSelected = selected?.kind === 'anchor' && selected.id === anchor.id
+                const domain = doc.processDomains.find(d => d.id === anchor.domainId)
+                return (
+                  <div key={anchor.id} style={{ marginBottom: 8, cursor: 'pointer', padding: '4px 6px', borderRadius: 3, borderLeft: `3px solid ${domain?.color ?? '#8C6E45'}`, background: isSelected ? '#F0E6C8' : 'transparent', fontSize: 11, lineHeight: 1.4 }}
+                    onClick={e => { e.stopPropagation(); onSelect({ kind: 'anchor', id: anchor.id }) }}>
+                    <span style={{ fontWeight: 600, color: '#4A4A4A', marginRight: 4 }}>{anchor.year}</span>
+                    <span style={{ color: '#3E3B35' }}>{anchor.label}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Domain legend */}

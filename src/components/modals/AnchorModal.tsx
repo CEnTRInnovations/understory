@@ -40,7 +40,12 @@ export function AnchorModal({ initial, doc, onSave, onClose }: Props) {
         <FormField label="Label"><input style={inputStyle} value={label} onChange={e => setLabel(e.target.value)} required /></FormField>
         <FormField label="Year"><input style={inputStyle} type="number" value={year} onChange={e => setYear(e.target.value)} required /></FormField>
         <FormField label="Domain">
-          <select style={inputStyle} value={domainId} onChange={e => { setDomainId(e.target.value); setProcessId('') }}>
+          <select style={inputStyle} value={domainId} onChange={e => {
+              const newDomainId = e.target.value
+              setDomainId(newDomainId)
+              const firstProcess = doc.processes.find(p => p.domainId === newDomainId)
+              setProcessId(firstProcess?.id ?? '')
+            }}>
             {doc.processDomains.sort((a, b) => a.order - b.order).map(d => (
               <option key={d.id} value={d.id}>{d.label}</option>
             ))}

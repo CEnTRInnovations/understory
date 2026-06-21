@@ -26,7 +26,7 @@ export function ProcessModal({ initial, doc, onSave, onClose }: Props) {
       importance: importance || undefined,
       description: description || undefined,
       startYear: parseInt(startYear, 10),
-      endYear: parseInt(endYear, 10),
+      ...(endYear.trim() !== '' ? { endYear: parseInt(endYear, 10) } : {}),
     })
     onClose()
   }

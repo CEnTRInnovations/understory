@@ -63,11 +63,17 @@ export function InspectorPanel({ doc, selected, onClose, onUpdateAnchor }: Props
   } else if (selected.kind === 'interaction') {
     const ix = doc.interactions.find(i => i.id === selected.id)
     if (!ix) return null
+    const fromLabel = ix.fromType === 'process'
+      ? doc.processes.find(p => p.id === ix.fromId)?.label ?? ix.fromId
+      : doc.anchors.find(a => a.id === ix.fromId)?.label ?? ix.fromId
+    const toLabel = ix.toType === 'process'
+      ? doc.processes.find(p => p.id === ix.toId)?.label ?? ix.toId
+      : doc.anchors.find(a => a.id === ix.toId)?.label ?? ix.toId
     content = (
       <div>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>"{ix.verb}"</div>
         <div style={{ fontSize: 12, color: '#6B625A', marginBottom: 8 }}>
-          {ix.fromId} → {ix.toId}
+          {fromLabel} → {toLabel}
         </div>
         <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
           <tbody>
