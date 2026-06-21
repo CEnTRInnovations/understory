@@ -89,6 +89,14 @@ const EVENT_EDGE_PADDING = 70; // px
 // connected events sit roughly one above the other.
 const EVENT_CARD_HALF_HEIGHT = 18; // px
 
+// ── Trend / column header register ──
+const COLUMN_HEADER_H  = 26; // px — fixed column-label row above trend register
+// @ts-ignore foundational constant used by Task 5+
+const TREND_BAND_H     = 14; // px — uniform height for all trend bands (used by Task 5+)
+const TREND_REGISTER_H = 20; // px — TREND_BAND_H + 3px top/bottom padding
+// @ts-ignore foundational constant used by Task 5+
+const TOP_RESERVE_H    = COLUMN_HEADER_H + TREND_REGISTER_H; // 46px total (used by Task 5+)
+
 // Which edge of an event card a connection attaches to. 'auto' means: pick
 // whichever side faces the other endpoint, the old default behavior.
 type Side = 'top' | 'right' | 'bottom' | 'left';
@@ -323,6 +331,38 @@ function computeStrandLabels(
   });
 
   return positions;
+}
+
+// @ts-ignore foundational function used by Task 5+ for trend band label rendering
+// Converts a hex color to its darkest HSL stop (lightness 20%) for legible trend band labels.
+function darkestStop(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const s = max === min ? 0 : l > 0.5
+    ? (max - min) / (2 - max - min)
+    : (max - min) / (max + min);
+  let h = 0;
+  if (max !== min) {
+    if (max === r)      h = ((g - b) / (max - min) + 6) % 6;
+    else if (max === g) h = (b - r) / (max - min) + 2;
+    else                h = (r - g) / (max - min) + 4;
+    h /= 6;
+  }
+  const L2 = 0.20;
+  const q = L2 < 0.5 ? L2 * (1 + s) : L2 + s - L2 * s;
+  const p = 2 * L2 - q;
+  const hue2rgb = (t: number) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
+  return `#${toHex(hue2rgb(h + 1 / 3))}${toHex(hue2rgb(h))}${toHex(hue2rgb(h - 1 / 3))}`;
 }
 
 type StrandConnGeom =
