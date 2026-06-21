@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
 import './understory.css';
 
@@ -91,8 +91,8 @@ const EVENT_CARD_HALF_HEIGHT = 18; // px
 // ── Trend / column header register ──
 const COLUMN_HEADER_H  = 26; // px — fixed column-label row above trend register
 const TREND_BAND_H     = 14; // px — uniform height for all trend bands
-const TREND_REGISTER_H = 20; // px — TREND_BAND_H + 3px top/bottom padding
-const TOP_RESERVE_H    = COLUMN_HEADER_H + TREND_REGISTER_H; // 46px total
+const TREND_REGISTER_H = 20; // px — minimum register height (fits 0–1 trends)
+const TREND_SLOT_H     = TREND_BAND_H + 2; // 16px — band height + inter-slot gap
 
 // Which edge of an event card a connection attaches to. 'auto' means: pick
 // whichever side faces the other endpoint, the old default behavior.
@@ -370,13 +370,14 @@ function computeStrandConnectorGeometry(
   toEv: TimelineEvent,
   w: number,
   lh: number,
+  topH: number,
   fromOffset = 0,
   toOffset = 0,
 ): StrandConnGeom {
   const x1 = eventLeftPx(fromEv.x, w) + fromOffset;
   const x2 = eventLeftPx(toEv.x, w)   + toOffset;
-  const y1 = TOP_RESERVE_H + fromEv.layer * lh + lh / 2;
-  const y2 = TOP_RESERVE_H + toEv.layer   * lh + lh / 2;
+  const y1 = topH + fromEv.layer * lh + lh / 2;
+  const y2 = topH + toEv.layer   * lh + lh / 2;
   if (fromEv.layer === toEv.layer) {
     // Same strand: small arc above the line so lateral connections are legible
     const cx = (x1 + x2) / 2;
@@ -792,7 +793,18 @@ const ComplexityTimeline = () => {
   // (auto-sized) card edge instead of a fixed-size guess.
   const cardRefs    = useRef<(HTMLDivElement | null)[]>([]);
 
-  const timelineHeight = TOP_RESERVE_H + (layers.length > 0 ? layers.length * layerHeight + 48 : 280);
+  const trendRegisterH = Math.max(TREND_REGISTER_H, trends.length * TREND_SLOT_H + 4);
+  const topReserveH = COLUMN_HEADER_H + trendRegisterH;
+
+  const sortedTrends = useMemo(() =>
+    [...trends].sort((a, b) =>
+      a.startYear !== b.startYear ? a.startYear - b.startYear :
+      a.endYear   !== b.endYear   ? a.endYear   - b.endYear   :
+      a.label.localeCompare(b.label)
+    ),
+  [trends]);
+
+  const timelineHeight = topReserveH + (layers.length > 0 ? layers.length * layerHeight + 48 : 280);
 
   // ── Cut-aware year ↔ percentage conversion, memoized against current scale ──
   const yearToPct = useCallback(
@@ -1007,14 +1019,14 @@ const ComplexityTimeline = () => {
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x    = ((e.clientX - rect.left) / rect.width) * 100;
-    const y    = e.clientY - rect.top - TOP_RESERVE_H;
+    const y    = e.clientY - rect.top - topReserveH;
     const layer = Math.floor(y / layerHeight);
     if (layer < 0 || layer >= layers.length) return;
     const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
     const year = Math.round(pctToYear(x));
     setEditingEvent(null);
     setShowEventModal({ x, year, layer, yOffset });
-  }, [connectingFrom, layers.length, layerHeight, pctToYear]);
+  }, [connectingFrom, layers.length, layerHeight, pctToYear, topReserveH]);
 
   // ── Event click ──
   const handleEventClick = (e: React.MouseEvent, i: number) => {
@@ -1060,7 +1072,7 @@ const ComplexityTimeline = () => {
     if (draggingEvent === null || !timelineRef.current) return;
     const rect  = timelineRef.current.getBoundingClientRect();
     const x     = ((e.clientX - rect.left) / rect.width) * 100;
-    const y     = e.clientY - rect.top - TOP_RESERVE_H;
+    const y     = e.clientY - rect.top - topReserveH;
     const layer = Math.floor(y / layerHeight);
     if (layer < 0 || layer >= layers.length) return;
     const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
@@ -1081,7 +1093,7 @@ const ComplexityTimeline = () => {
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
-    const top     = TOP_RESERVE_H + ev.layer * layerHeight + ev.yOffset;
+    const top     = topReserveH + ev.layer * layerHeight + ev.yOffset;
     const centerY = top + halfH;
     return {
       x: eventLeftPx(ev.x, rect.width),
@@ -1090,7 +1102,7 @@ const ComplexityTimeline = () => {
       bottom: centerY + halfH,
       halfWidth: halfW,
     };
-  }, [events, layerHeight]);
+  }, [events, layerHeight, topReserveH]);
 
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
@@ -1196,7 +1208,7 @@ const ComplexityTimeline = () => {
 
     // Layer dividers + labels
     layers.forEach((lyr, i) => {
-      const y = TOP_RESERVE_H + i * layerHeight;
+      const y = topReserveH + i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1211,9 +1223,9 @@ const ComplexityTimeline = () => {
       ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
     });
 
-    // Trend bands — top register, uniform height, 30% opacity, dark label
-    const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
-    trends.forEach(trend => {
+    // Trend bands — staggered rows, sorted by start date
+    sortedTrends.forEach((trend, k) => {
+      const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
       const x  = (yearToPct(trend.startYear) / 100) * w;
       const tw = (yearToPct(trend.endYear)   / 100) * w - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
@@ -1226,13 +1238,13 @@ const ComplexityTimeline = () => {
 
     // Separator rule
     ctx.save(); ctx.strokeStyle = 'rgba(62,59,53,0.18)'; ctx.lineWidth = 0.5;
-    ctx.beginPath(); ctx.moveTo(0, TOP_RESERVE_H); ctx.lineTo(w, TOP_RESERVE_H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
     ctx.restore();
 
     // Events (cards)
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
-      const y = TOP_RESERVE_H + ev.layer * layerHeight + ev.yOffset;
+      const y = topReserveH + ev.layer * layerHeight + ev.yOffset;
       const cardEl = cardRefs.current[evi];
       const padding = 6; const lineHeight = 13;
       const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
@@ -1280,7 +1292,7 @@ const ComplexityTimeline = () => {
 
     // Strand lines (one per layer)
     layers.forEach((_, i) => {
-      const y = TOP_RESERVE_H + i * layerHeight + layerHeight / 2;
+      const y = topReserveH + i * layerHeight + layerHeight / 2;
       ctx.save();
       ctx.strokeStyle = '#3E3B35'; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w - 10, y); ctx.stroke();
@@ -1308,7 +1320,7 @@ const ComplexityTimeline = () => {
       const toConns    = connAtEvent.get(conn.to)   ?? [];
       const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
       const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
-      const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerHeight, fromOffset, toOffset);
+      const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerHeight, topReserveH, fromOffset, toOffset);
       ctx.save();
       ctx.strokeStyle = '#7E7C78'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]);
       ctx.beginPath();
@@ -1321,7 +1333,7 @@ const ComplexityTimeline = () => {
 
     // Event labels (plain text, alternating above/below per strand)
     layers.forEach((_, layerIdx) => {
-      const strandY = TOP_RESERVE_H + layerIdx * layerHeight + layerHeight / 2;
+      const strandY = topReserveH + layerIdx * layerHeight + layerHeight / 2;
       const layerEvts = events
         .map((e, globalIdx) => ({ e, globalIdx }))
         .filter(({ e }) => e.layer === layerIdx);
@@ -1344,7 +1356,7 @@ const ComplexityTimeline = () => {
 
     // Layer labels (left-edge, like cards mode)
     layers.forEach((lyr, i) => {
-      const y = TOP_RESERVE_H + i * layerHeight;
+      const y = topReserveH + i * layerHeight;
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1359,9 +1371,9 @@ const ComplexityTimeline = () => {
       ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
     });
 
-    // Trend bands — top register, uniform height, 30% opacity, dark label
-    const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
-    trends.forEach(trend => {
+    // Trend bands — staggered rows, sorted by start date
+    sortedTrends.forEach((trend, k) => {
+      const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
       const x  = (yearToPct(trend.startYear) / 100) * w;
       const tw = (yearToPct(trend.endYear)   / 100) * w - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
@@ -1374,7 +1386,7 @@ const ComplexityTimeline = () => {
 
     // Separator rule
     ctx.save(); ctx.strokeStyle = 'rgba(62,59,53,0.18)'; ctx.lineWidth = 0.5;
-    ctx.beginPath(); ctx.moveTo(0, TOP_RESERVE_H); ctx.lineTo(w, TOP_RESERVE_H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
     ctx.restore();
 
     // Year axis (same as cards mode)
@@ -1646,7 +1658,7 @@ const ComplexityTimeline = () => {
           {layers.length > 0 && (
             <div className="u-layer-gutter" style={{ height: timelineHeight }}>
               {layers.map((layer, i) => (
-                <div key={i} className="u-layer-gutter-row" style={{ top: TOP_RESERVE_H + i * layerHeight, height: layerHeight }}>
+                <div key={i} className="u-layer-gutter-row" style={{ top: topReserveH + i * layerHeight, height: layerHeight }}>
                   <div className="u-layer-label">
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
@@ -1712,7 +1724,7 @@ const ComplexityTimeline = () => {
 
                 {/* Strand lines — one per layer, rendered in strands mode */}
                 {displayMode === 'strands' && layers.map((_lyr, i) => {
-                  const y = TOP_RESERVE_H + i * layerHeight + layerHeight / 2;
+                  const y = topReserveH + i * layerHeight + layerHeight / 2;
                   const color = '#3E3B35';
                   return (
                     <line key={`strand-${i}`}
@@ -1746,7 +1758,7 @@ const ComplexityTimeline = () => {
                       const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
                       const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
                       path = strandGeomToSVGPath(
-                        computeStrandConnectorGeometry(events[conn.from], events[conn.to], svgW, layerHeight, fromOffset, toOffset)
+                        computeStrandConnectorGeometry(events[conn.from], events[conn.to], svgW, layerHeight, topReserveH, fromOffset, toOffset)
                       );
                     } else {
                       const from = getEventPos(conn.from);
@@ -1788,7 +1800,7 @@ const ComplexityTimeline = () => {
                 if (displayMode === 'strands') {
                   const svgW = svgWidth || canvasWidth;
                   const geom = computeStrandConnectorGeometry(
-                    events[conn.from], events[conn.to], svgW, layerHeight
+                    events[conn.from], events[conn.to], svgW, layerHeight, topReserveH
                   );
                   // midpoint of bezier at t=0.5
                   if (geom.kind === 'quad') {
@@ -1859,12 +1871,12 @@ const ComplexityTimeline = () => {
               </div>
 
               {/* Hairline separator between header/trend register and event zone */}
-              <div className="u-content-separator" />
+              <div className="u-content-separator" style={{ top: topReserveH }} />
 
               {/* Layer row divider lines (titles live in the sticky gutter) */}
               {layers.map((_, i) => (
                 <div key={i} className="u-layer-row"
-                  style={{ top: TOP_RESERVE_H + i * layerHeight, height: layerHeight }} />
+                  style={{ top: topReserveH + i * layerHeight, height: layerHeight }} />
               ))}
 
               {/* Year axis */}
@@ -1904,28 +1916,29 @@ const ComplexityTimeline = () => {
               </div>
 
               {/* Trend bands */}
-              {displayMode === 'cards' && trends.map((trend, i) => {
+              {displayMode === 'cards' && sortedTrends.map((trend, k) => {
+                const origIdx = trends.indexOf(trend);
                 const left  = yearToPct(trend.startYear);
                 const width = yearToPct(trend.endYear) - left;
-                const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
+                const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
                 return (
-                  <div key={i} className="u-trend-band" style={{
+                  <div key={k} className="u-trend-band" style={{
                     left: `${left}%`, width: `${width}%`,
                     top: bandTop, height: TREND_BAND_H,
                     background: trend.color + '4D',
                     color: darkestStop(trend.color),
                   }}
-                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}
-                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
+                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
                     {trend.label}
-                    {selectedTrend === i && (
+                    {selectedTrend === origIdx && (
                       <div className="u-trend-actions">
                         <button className="u-event-action-btn" title="Edit trend"
-                          onClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                          onClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
                           <Edit2 size={13} />
                         </button>
                         <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
-                          onClick={e => { e.stopPropagation(); deleteTrend(i); }}>
+                          onClick={e => { e.stopPropagation(); deleteTrend(origIdx); }}>
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -1934,28 +1947,29 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {displayMode === 'strands' && trends.map((trend, i) => {
+              {displayMode === 'strands' && sortedTrends.map((trend, k) => {
+                const origIdx = trends.indexOf(trend);
                 const left    = yearToPct(trend.startYear);
                 const width   = yearToPct(trend.endYear) - left;
-                const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
+                const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
                 return (
-                  <div key={i} className="u-strand-trend-bar" style={{
+                  <div key={k} className="u-strand-trend-bar" style={{
                     left: `${left}%`, width: `${width}%`,
                     top: bandTop, height: TREND_BAND_H,
                     background: trend.color + '4D',
                     color: darkestStop(trend.color),
                   }}
-                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}
-                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
+                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
                     {trend.label}
-                    {selectedTrend === i && (
+                    {selectedTrend === origIdx && (
                       <div className="u-trend-actions">
                         <button className="u-event-action-btn" title="Edit trend"
-                          onClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                          onClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
                           <Edit2 size={13} />
                         </button>
                         <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
-                          onClick={e => { e.stopPropagation(); deleteTrend(i); }}>
+                          onClick={e => { e.stopPropagation(); deleteTrend(origIdx); }}>
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -1972,7 +1986,7 @@ const ComplexityTimeline = () => {
                     key={i}
                     draggable
                     className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
-                    style={{ left: eventLeft(event.x), top: `${TOP_RESERVE_H + event.layer * layerHeight + event.yOffset}px` }}
+                    style={{ left: eventLeft(event.x), top: `${topReserveH + event.layer * layerHeight + event.yOffset}px` }}
                     onDragStart={e => handleDragStart(e, i)}
                     onClick={e => handleEventClick(e, i)}
                     onDoubleClick={e => {
@@ -2027,7 +2041,7 @@ const ComplexityTimeline = () => {
 
               {/* Strands mode event labels */}
               {displayMode === 'strands' && layers.map((_, layerIdx) => {
-                const strandY = TOP_RESERVE_H + layerIdx * layerHeight + layerHeight / 2;
+                const strandY = topReserveH + layerIdx * layerHeight + layerHeight / 2;
                 const layerEvts = events
                   .map((e, globalIdx) => ({ e, globalIdx }))
                   .filter(({ e }) => e.layer === layerIdx);

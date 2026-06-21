@@ -475,7 +475,6 @@ h1, h2, h3 {
 }
 .u-content-separator {
   position: absolute;
-  top: 46px;
   left: 0; right: 0;
   height: 0;
   border-top: 0.5px solid rgba(62, 59, 53, 0.18);
