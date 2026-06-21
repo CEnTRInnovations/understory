@@ -59,7 +59,6 @@ const EXPORT_PROFILES: ExportProfile[] = [
   { id: 'book-6x9',     label: 'Book trim (6×9)',                ratio: 6/9,    pxWidth: 1800, fontScale: 0.75 },
   { id: 'book-7x10',    label: 'Book trim (7×10)',               ratio: 7/10,   pxWidth: 2100, fontScale: 0.8 },
 ];
-const PORTRAIT_IDS = new Set(['letter-port', 'book-6x9', 'book-7x10']);
 
 // ── Row height (adjustable) ──
 const LAYER_HEIGHT_DEFAULT = 120;
@@ -785,7 +784,6 @@ const ComplexityTimeline = () => {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showCutModal, setShowCutModal]           = useState(false);
   const [showExportMenu, setShowExportMenu]       = useState(false);
-  const [selectedProfileId, setSelectedProfileId] = useState('native');
   const [cropInstead, setCropInstead]             = useState(false);
 
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -1559,45 +1557,21 @@ const ComplexityTimeline = () => {
           </button>
           {showExportMenu && (
             <div className="u-export-menu u-export-menu--profiles">
+              <label className="u-export-crop-row">
+                <input type="checkbox" checked={cropInstead} onChange={e => setCropInstead(e.target.checked)} />
+                {' '}Crop to fit (default: letterbox)
+              </label>
               <div className="u-export-profile-list">
                 {EXPORT_PROFILES.map(p => (
                   <button
                     key={p.id}
-                    className={`u-export-profile-btn ${selectedProfileId === p.id ? 'u-export-profile-btn--active' : ''}`}
-                    onClick={() => setSelectedProfileId(p.id)}
+                    className="u-export-profile-btn"
+                    onClick={() => { exportPNG(p); setShowExportMenu(false); }}
                   >
                     {p.label}
                   </button>
                 ))}
               </div>
-
-              {(() => {
-                const profile = EXPORT_PROFILES.find(p => p.id === selectedProfileId)!;
-                const isPortrait = PORTRAIT_IDS.has(selectedProfileId);
-                const rect = timelineRef.current?.getBoundingClientRect();
-                const naturalRatio = rect ? rect.width / rect.height : 0;
-                const showPortraitWarning = isPortrait && profile.ratio > 0 && naturalRatio > profile.ratio * 2.5;
-                return (
-                  <>
-                    {showPortraitWarning && (
-                      <p className="u-export-portrait-warn">
-                        This timeline is much wider than tall — consider Slide or Tabloid for full legibility,
-                        or use Cuts to shorten the visible range before exporting portrait.
-                      </p>
-                    )}
-                    <label className="u-export-crop-row">
-                      <input type="checkbox" checked={cropInstead} onChange={e => setCropInstead(e.target.checked)} />
-                      {' '}Crop to fit (default: letterbox)
-                    </label>
-                    <button
-                      className="u-btn u-btn--primary"
-                      onClick={() => { exportPNG(profile); setShowExportMenu(false); }}
-                    >
-                      Export as PNG
-                    </button>
-                  </>
-                );
-              })()}
             </div>
           )}
         </div>
