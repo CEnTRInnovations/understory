@@ -91,11 +91,10 @@ const EVENT_CARD_HALF_HEIGHT = 18; // px
 
 // ── Trend / column header register ──
 const COLUMN_HEADER_H  = 26; // px — fixed column-label row above trend register
-// @ts-ignore foundational constant used by Task 5+
-const TREND_BAND_H     = 14; // px — uniform height for all trend bands (used by Task 5+)
+const TREND_BAND_H     = 14; // px — uniform height for all trend bands
 const TREND_REGISTER_H = 20; // px — TREND_BAND_H + 3px top/bottom padding
-// @ts-ignore foundational constant used by Task 5+
-const TOP_RESERVE_H    = COLUMN_HEADER_H + TREND_REGISTER_H; // 46px total (used by Task 5+)
+// @ts-ignore used by Task 7+ for event coordinate shift
+const TOP_RESERVE_H    = COLUMN_HEADER_H + TREND_REGISTER_H; // 46px total
 
 // Which edge of an event card a connection attaches to. 'auto' means: pick
 // whichever side faces the other endpoint, the old default behavior.
@@ -333,7 +332,6 @@ function computeStrandLabels(
   return positions;
 }
 
-// @ts-ignore foundational function used by Task 5+ for trend band label rendering
 // Converts a hex color to its darkest HSL stop (lightness 20%) for legible trend band labels.
 function darkestStop(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -1835,32 +1833,47 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {/* Column annotations */}
+              {/* Column background stripes — full-height, no label */}
               {columns.map((col, i) => {
                 const left  = yearToPct(col.startYear);
                 const width = yearToPct(col.endYear) - left;
                 return (
-                  <div key={i} className="u-col-annotation" style={{ left: `${left}%`, width: `${width}%` }}>
-                    <div className="u-col-label"
-                      onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
-                      onDoubleClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
-                      {col.label}
-                    </div>
-                    {selectedColumn === i && (
-                      <div className="u-col-actions">
-                        <button className="u-event-action-btn" title="Edit column"
-                          onClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
-                          <Edit2 size={13} />
-                        </button>
-                        <button className="u-event-action-btn u-event-action-btn--danger" title="Delete column"
-                          onClick={e => { e.stopPropagation(); deleteColumn(i); }}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <div key={i} className="u-col-annotation" style={{ left: `${left}%`, width: `${width}%` }} />
                 );
               })}
+
+              {/* Column header row — labels pinned to the top register */}
+              <div className="u-col-header-row">
+                {columns.map((col, i) => {
+                  const left  = yearToPct(col.startYear);
+                  const width = yearToPct(col.endYear) - left;
+                  return (
+                    <div key={i} style={{ position: 'absolute', left: `${left}%`, width: `${width}%` }}>
+                      <div className="u-col-header-label"
+                        style={{ left: '50%' }}
+                        onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
+                        onDoubleClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
+                        {col.label}
+                      </div>
+                      {selectedColumn === i && (
+                        <div className="u-col-actions" style={{ top: '100%', left: '50%' }}>
+                          <button className="u-event-action-btn" title="Edit column"
+                            onClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
+                            <Edit2 size={13} />
+                          </button>
+                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete column"
+                            onClick={e => { e.stopPropagation(); deleteColumn(i); }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Hairline separator between header/trend register and event zone */}
+              <div className="u-content-separator" />
 
               {/* Layer row divider lines (titles live in the sticky gutter) */}
               {layers.map((_, i) => (
@@ -1908,11 +1921,13 @@ const ComplexityTimeline = () => {
               {displayMode === 'cards' && trends.map((trend, i) => {
                 const left  = yearToPct(trend.startYear);
                 const width = yearToPct(trend.endYear) - left;
+                const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
                 return (
                   <div key={i} className="u-trend-band" style={{
                     left: `${left}%`, width: `${width}%`,
-                    bottom: `${48 + i * 22}px`, height: 20,
-                    background: trend.color
+                    top: bandTop, height: TREND_BAND_H,
+                    background: trend.color,
+                    color: darkestStop(trend.color),
                   }}
                     onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}
                     onDoubleClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
@@ -1933,40 +1948,35 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {displayMode === 'strands' && (() => {
-                const STRAND_BAR_HEIGHT = 14;
-                const STRAND_BAR_GUTTER = 4;
-                const sorted = [...trends].sort((a, b) => a.startYear - b.startYear);
-                return sorted.map((trend, i) => {
-                  const origIdx = trends.indexOf(trend);
-                  const left  = yearToPct(trend.startYear);
-                  const width = yearToPct(trend.endYear) - left;
-                  const bottom = 48 + i * (STRAND_BAR_HEIGHT + STRAND_BAR_GUTTER);
-                  return (
-                    <div key={origIdx} className="u-strand-trend-bar" style={{
-                      left: `${left}%`, width: `${width}%`,
-                      bottom: `${bottom}px`, height: STRAND_BAR_HEIGHT,
-                      background: trend.color,
-                    }}
-                      onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
-                      onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
-                      <span className="u-strand-trend-label">{trend.label}</span>
-                      {selectedTrend === origIdx && (
-                        <div className="u-trend-actions">
-                          <button className="u-event-action-btn" title="Edit trend"
-                            onClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
-                            <Edit2 size={13} />
-                          </button>
-                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
-                            onClick={e => { e.stopPropagation(); deleteTrend(origIdx); }}>
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
+              {displayMode === 'strands' && trends.map((trend, i) => {
+                const left    = yearToPct(trend.startYear);
+                const width   = yearToPct(trend.endYear) - left;
+                const bandTop = COLUMN_HEADER_H + (TREND_REGISTER_H - TREND_BAND_H) / 2;
+                return (
+                  <div key={i} className="u-strand-trend-bar" style={{
+                    left: `${left}%`, width: `${width}%`,
+                    top: bandTop, height: TREND_BAND_H,
+                    background: trend.color,
+                    color: darkestStop(trend.color),
+                  }}
+                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}
+                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                    {trend.label}
+                    {selectedTrend === i && (
+                      <div className="u-trend-actions">
+                        <button className="u-event-action-btn" title="Edit trend"
+                          onClick={e => { e.stopPropagation(); setEditingTrend(i); setShowTrendModal(true); }}>
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
+                          onClick={e => { e.stopPropagation(); deleteTrend(i); }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
               {/* Events */}
               {events.map((event, i) => {
