@@ -1264,7 +1264,7 @@ const ComplexityTimeline = () => {
       const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
       const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerHeight, fromOffset, toOffset);
       ctx.save();
-      ctx.strokeStyle = '#9E9B96'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]);
+      ctx.strokeStyle = '#7E7C78'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]);
       ctx.beginPath();
       ctx.moveTo(geom.x1, geom.y1);
       if (geom.kind === 'quad') ctx.quadraticCurveTo(geom.cx, geom.cy, geom.x2, geom.y2);
@@ -1743,7 +1743,7 @@ const ComplexityTimeline = () => {
                     return (
                       <g key={i}>
                         <path d={path}
-                          stroke={displayMode === 'strands' ? '#9E9B96' : conn.color}
+                          stroke={displayMode === 'strands' ? '#7E7C78' : conn.color}
                           strokeWidth={displayMode === 'strands' ? 1 : conn.width}
                           strokeOpacity={displayMode === 'strands' ? (isActive ? 0.35 : 0.1) : 1}
                           fill="none"
