@@ -53,7 +53,7 @@ type ExportProfile = {
 const EXPORT_PROFILES: ExportProfile[] = [
   { id: 'native',       label: 'Native canvas ratio',           ratio: 0,      pxWidth: 0,    fontScale: 1.0 },
   { id: 'slide-16x9',   label: 'Slide (16:9)',                  ratio: 16/9,   pxWidth: 1920, fontScale: 1.0 },
-  { id: 'tabloid-land', label: 'Tabloid landscape (11×17)',      ratio: 17/11,  pxWidth: 3400, fontScale: 1.0 },
+  { id: 'tabloid-land', label: 'Tabloid landscape (11×17)',      ratio: 17/11,  pxWidth: 5100, fontScale: 1.0 },
   { id: 'letter-land',  label: 'Letter landscape (11×8.5)',      ratio: 11/8.5, pxWidth: 3300, fontScale: 1.0 },
   { id: 'letter-port',  label: 'Letter portrait (8.5×11)',       ratio: 8.5/11, pxWidth: 2550, fontScale: 0.85 },
   { id: 'book-6x9',     label: 'Book trim (6×9)',                ratio: 6/9,    pxWidth: 1800, fontScale: 0.75 },
@@ -1414,8 +1414,7 @@ const ComplexityTimeline = () => {
     let offsetY = 0;
 
     if (profile.id === 'native' || profile.ratio === 0) {
-      // Current behavior: 2× scale of the live viewport
-      const scale = 2;
+      const scale = 3;
       canvas.width  = rect.width  * scale;
       canvas.height = rect.height * scale;
       const ctx = canvas.getContext('2d')!;
@@ -1470,7 +1469,7 @@ const ComplexityTimeline = () => {
       a.href = URL.createObjectURL(blob);
       a.download = 'understory-timeline.png';
       a.click();
-    });
+    }, 'image/png');
   };
 
   // ── Year axis tick step ──
