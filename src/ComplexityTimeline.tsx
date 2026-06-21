@@ -754,7 +754,7 @@ const ComplexityTimeline = () => {
   const [canvasWidth, setCanvasWidth] = useState(CANVAS_WIDTH_INIT);
   const [layerHeight, setLayerHeight] = useState(LAYER_HEIGHT_DEFAULT);
   const [svgWidth, setSvgWidth] = useState(0);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('strands');
 
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
   const [connectingFrom, setConnectingFrom]   = useState<number | null>(null);
@@ -1143,7 +1143,7 @@ const ComplexityTimeline = () => {
         setDisplayMode(
           data.version >= 3 && (data.displayMode === 'cards' || data.displayMode === 'strands')
             ? data.displayMode
-            : 'cards'
+            : 'strands'
         );
         // Clear any in-progress selection/edit state from the timeline we're replacing.
         setSelectedEvent(null);
