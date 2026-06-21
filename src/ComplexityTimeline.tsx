@@ -91,8 +91,10 @@ const EVENT_CARD_HALF_HEIGHT = 18; // px
 
 // ── Trend / column header register ──
 const COLUMN_HEADER_H  = 26; // px — fixed column-label row above trend register
+// @ts-ignore foundational constant used by Task 5+
 const TREND_BAND_H     = 14; // px — uniform height for all trend bands (used by Task 5+)
 const TREND_REGISTER_H = 20; // px — TREND_BAND_H + 3px top/bottom padding
+// @ts-ignore foundational constant used by Task 5+
 const TOP_RESERVE_H    = COLUMN_HEADER_H + TREND_REGISTER_H; // 46px total (used by Task 5+)
 
 // Which edge of an event card a connection attaches to. 'auto' means: pick
@@ -331,6 +333,7 @@ function computeStrandLabels(
   return positions;
 }
 
+// @ts-ignore foundational function used by Task 5+ for trend band label rendering
 // Converts a hex color to its darkest HSL stop (lightness 20%) for legible trend band labels.
 function darkestStop(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
