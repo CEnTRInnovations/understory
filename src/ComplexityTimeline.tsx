@@ -1668,7 +1668,7 @@ const ComplexityTimeline = () => {
           {layers.length > 0 && (
             <div className="u-layer-gutter" style={{ height: timelineHeight }}>
               {layers.map((layer, i) => (
-                <div key={i} className="u-layer-gutter-row" style={{ top: i * layerHeight, height: layerHeight }}>
+                <div key={i} className="u-layer-gutter-row" style={{ top: TOP_RESERVE_H + i * layerHeight, height: layerHeight }}>
                   <div className="u-layer-label">
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
@@ -1934,7 +1934,7 @@ const ComplexityTimeline = () => {
                   <div key={i} className="u-trend-band" style={{
                     left: `${left}%`, width: `${width}%`,
                     top: bandTop, height: TREND_BAND_H,
-                    background: trend.color,
+                    background: trend.color + '4D',
                     color: darkestStop(trend.color),
                   }}
                     onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}
@@ -1964,7 +1964,7 @@ const ComplexityTimeline = () => {
                   <div key={i} className="u-strand-trend-bar" style={{
                     left: `${left}%`, width: `${width}%`,
                     top: bandTop, height: TREND_BAND_H,
-                    background: trend.color,
+                    background: trend.color + '4D',
                     color: darkestStop(trend.color),
                   }}
                     onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === i ? null : i); }}

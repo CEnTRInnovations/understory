@@ -561,14 +561,14 @@ h1, h2, h3 {
   font-family: "Alegreya Sans", sans-serif;
   font-size: 0.625rem;
   letter-spacing: 0.03em;
-  opacity: 0.30;
+  /* opacity removed — background rgba set via inline style for transparency */
   border-radius: 2px;
   pointer-events: auto;
   cursor: pointer;
   padding-left: 4px;
   overflow: hidden;
 }
-.u-trend-band:hover { opacity: 0.50; }
+.u-trend-band:hover { filter: brightness(1.1); }
 .u-trend-actions {
   position: absolute;
   top: calc(100% + 5px);
@@ -893,13 +893,13 @@ h1, h2, h3 {
   position: absolute;
   display: flex;
   align-items: center;
-  opacity: 0.30;
+  /* opacity removed — background rgba set via inline style for transparency */
   cursor: pointer;
   padding-left: 4px;
   overflow: hidden;
   border-radius: 2px;
 }
-.u-strand-trend-bar:hover { opacity: 0.50; }
+.u-strand-trend-bar:hover { filter: brightness(1.1); }
 .u-strand-trend-label {
   position: absolute;
   left: 4px;
