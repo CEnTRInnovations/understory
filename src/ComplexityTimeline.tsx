@@ -93,7 +93,6 @@ const EVENT_CARD_HALF_HEIGHT = 18; // px
 const COLUMN_HEADER_H  = 26; // px — fixed column-label row above trend register
 const TREND_BAND_H     = 14; // px — uniform height for all trend bands
 const TREND_REGISTER_H = 20; // px — TREND_BAND_H + 3px top/bottom padding
-// @ts-ignore used by Task 7+ for event coordinate shift
 const TOP_RESERVE_H    = COLUMN_HEADER_H + TREND_REGISTER_H; // 46px total
 
 // Which edge of an event card a connection attaches to. 'auto' means: pick
@@ -377,8 +376,8 @@ function computeStrandConnectorGeometry(
 ): StrandConnGeom {
   const x1 = eventLeftPx(fromEv.x, w) + fromOffset;
   const x2 = eventLeftPx(toEv.x, w)   + toOffset;
-  const y1 = fromEv.layer * lh + lh / 2;
-  const y2 = toEv.layer   * lh + lh / 2;
+  const y1 = TOP_RESERVE_H + fromEv.layer * lh + lh / 2;
+  const y2 = TOP_RESERVE_H + toEv.layer   * lh + lh / 2;
   if (fromEv.layer === toEv.layer) {
     // Same strand: small arc above the line so lateral connections are legible
     const cx = (x1 + x2) / 2;
@@ -794,7 +793,7 @@ const ComplexityTimeline = () => {
   // (auto-sized) card edge instead of a fixed-size guess.
   const cardRefs    = useRef<(HTMLDivElement | null)[]>([]);
 
-  const timelineHeight = layers.length > 0 ? layers.length * layerHeight + 48 : 280;
+  const timelineHeight = TOP_RESERVE_H + (layers.length > 0 ? layers.length * layerHeight + 48 : 280);
 
   // ── Cut-aware year ↔ percentage conversion, memoized against current scale ──
   const yearToPct = useCallback(
@@ -1005,7 +1004,7 @@ const ComplexityTimeline = () => {
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x    = ((e.clientX - rect.left) / rect.width) * 100;
-    const y    = e.clientY - rect.top;
+    const y    = e.clientY - rect.top - TOP_RESERVE_H;
     const layer = Math.floor(y / layerHeight);
     if (layer < 0 || layer >= layers.length) return;
     const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
@@ -1058,7 +1057,7 @@ const ComplexityTimeline = () => {
     if (draggingEvent === null || !timelineRef.current) return;
     const rect  = timelineRef.current.getBoundingClientRect();
     const x     = ((e.clientX - rect.left) / rect.width) * 100;
-    const y     = e.clientY - rect.top;
+    const y     = e.clientY - rect.top - TOP_RESERVE_H;
     const layer = Math.floor(y / layerHeight);
     if (layer < 0 || layer >= layers.length) return;
     const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
@@ -1079,7 +1078,7 @@ const ComplexityTimeline = () => {
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
-    const top     = ev.layer * layerHeight + ev.yOffset;
+    const top     = TOP_RESERVE_H + ev.layer * layerHeight + ev.yOffset;
     const centerY = top + halfH;
     return {
       x: eventLeftPx(ev.x, rect.width),
@@ -1726,7 +1725,7 @@ const ComplexityTimeline = () => {
 
                 {/* Strand lines — one per layer, rendered in strands mode */}
                 {displayMode === 'strands' && layers.map((_lyr, i) => {
-                  const y = i * layerHeight + layerHeight / 2;
+                  const y = TOP_RESERVE_H + i * layerHeight + layerHeight / 2;
                   const color = '#3E3B35';
                   return (
                     <line key={`strand-${i}`}
@@ -1878,7 +1877,7 @@ const ComplexityTimeline = () => {
               {/* Layer row divider lines (titles live in the sticky gutter) */}
               {layers.map((_, i) => (
                 <div key={i} className="u-layer-row"
-                  style={{ top: i * layerHeight, height: layerHeight }} />
+                  style={{ top: TOP_RESERVE_H + i * layerHeight, height: layerHeight }} />
               ))}
 
               {/* Year axis */}
@@ -1986,7 +1985,7 @@ const ComplexityTimeline = () => {
                     key={i}
                     draggable
                     className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
-                    style={{ left: eventLeft(event.x), top: `${event.layer * layerHeight + event.yOffset}px` }}
+                    style={{ left: eventLeft(event.x), top: `${TOP_RESERVE_H + event.layer * layerHeight + event.yOffset}px` }}
                     onDragStart={e => handleDragStart(e, i)}
                     onClick={e => handleEventClick(e, i)}
                     onDoubleClick={e => {
@@ -2041,7 +2040,7 @@ const ComplexityTimeline = () => {
 
               {/* Strands mode event labels */}
               {displayMode === 'strands' && layers.map((_, layerIdx) => {
-                const strandY = layerIdx * layerHeight + layerHeight / 2;
+                const strandY = TOP_RESERVE_H + layerIdx * layerHeight + layerHeight / 2;
                 const layerEvts = events
                   .map((e, globalIdx) => ({ e, globalIdx }))
                   .filter(({ e }) => e.layer === layerIdx);
