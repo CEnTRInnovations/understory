@@ -753,6 +753,7 @@ const ComplexityTimeline = () => {
   const [cuts, setCuts]               = useState<Cut[]>([]);
   const [canvasWidth, setCanvasWidth] = useState(CANVAS_WIDTH_INIT);
   const [layerHeight, setLayerHeight] = useState(LAYER_HEIGHT_DEFAULT);
+  const [svgWidth, setSvgWidth] = useState(0);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
 
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
@@ -861,7 +862,11 @@ const ComplexityTimeline = () => {
   // After displayMode commits (new elements mounted, cardRefs populated),
   // re-render once so connector geometry reads the correct ref dimensions.
   const [, forceReflow] = useReducer((x: number) => x + 1, 0);
-  useLayoutEffect(() => { forceReflow(); }, [displayMode]);
+  useLayoutEffect(() => {
+    const w = svgRef.current?.getBoundingClientRect().width ?? 0;
+    if (w > 0) setSvgWidth(w);
+    forceReflow();
+  }, [displayMode, canvasWidth]);
 
   // ── Canvas width (manual + auto-expand) ──
   // Grows the canvas automatically when something is placed near the current
@@ -1758,7 +1763,7 @@ const ComplexityTimeline = () => {
                       connAtEvent.get(conn.to)!.push(ci);
                     });
                   }
-                  const svgW = svgRef.current?.getBoundingClientRect().width ?? canvasWidth;
+                  const svgW = svgWidth || canvasWidth;
 
                   return connections.map((conn, i) => {
                     let path: string;
@@ -1808,7 +1813,7 @@ const ComplexityTimeline = () => {
                 if (selectedConnection !== i) return null;
                 let midX: number, midY: number;
                 if (displayMode === 'strands') {
-                  const svgW = svgRef.current?.getBoundingClientRect().width ?? canvasWidth;
+                  const svgW = svgWidth || canvasWidth;
                   const geom = computeStrandConnectorGeometry(
                     events[conn.from], events[conn.to], svgW, layerHeight
                   );
