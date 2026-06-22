@@ -60,10 +60,9 @@ const EXPORT_PROFILES: ExportProfile[] = [
   { id: 'book-7x10',    label: 'Book trim (7×10)',               ratio: 7/10,   pxWidth: 2100, fontScale: 0.8 },
 ];
 
-// ── Row height (adjustable) ──
+// ── Row height ──
 const LAYER_HEIGHT_DEFAULT = 120;
 const LAYER_HEIGHT_MIN     = 90;
-const LAYER_HEIGHT_MAX     = 220;
 
 // Vertical room an event card needs within its layer band, so it can be
 // dragged anywhere within the band without crossing into the row above/below.
@@ -71,12 +70,8 @@ const EVENT_TOP_MARGIN    = 12;
 const EVENT_BOTTOM_MARGIN = 56;
 const DEFAULT_Y_OFFSET    = 20;
 
-// ── Canvas width (endless horizontal canvas) ──
-const CANVAS_WIDTH_MIN   = 800;
-const CANVAS_WIDTH_MAX   = 20000;
+// ── Canvas initial width (used as fallback before ResizeObserver fires) ──
 const CANVAS_WIDTH_INIT  = 1600;
-const CANVAS_EDGE_MARGIN = 160; // px of breathing room kept at the right edge
-const CANVAS_GROWTH_STEP = 600;
 
 // Horizontal room kept clear at the very start/end of the timeline so an
 // event sitting exactly on startYear or endYear has space to render and
@@ -754,8 +749,8 @@ const ComplexityTimeline = () => {
   const [columns, setColumns]         = useState<Column[]>([]);
   const [trends, setTrends]           = useState<Trend[]>([]);
   const [cuts, setCuts]               = useState<Cut[]>([]);
-  const [canvasWidth, setCanvasWidth] = useState(CANVAS_WIDTH_INIT);
-  const [layerHeight, setLayerHeight] = useState(LAYER_HEIGHT_DEFAULT);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>('native');
+  const [containerWidth, setContainerWidth] = useState(CANVAS_WIDTH_INIT);
   const [svgWidth, setSvgWidth] = useState(0);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('strands');
 
@@ -786,17 +781,25 @@ const ComplexityTimeline = () => {
   const [showTrendModal, setShowTrendModal]       = useState(false);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showCutModal, setShowCutModal]           = useState(false);
-  const [showExportMenu, setShowExportMenu]       = useState(false);
-  const [cropInstead, setCropInstead]             = useState(false);
 
-  const timelineRef = useRef<HTMLDivElement>(null);
-  const svgRef      = useRef<SVGSVGElement>(null);
+  const timelineRef   = useRef<HTMLDivElement>(null);
+  const svgRef        = useRef<SVGSVGElement>(null);
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
   // Real rendered card elements, so connector anchors can hug the actual
   // (auto-sized) card edge instead of a fixed-size guess.
   const cardRefs    = useRef<(HTMLDivElement | null)[]>([]);
 
   const trendRegisterH = Math.max(TREND_REGISTER_H, trends.length * TREND_SLOT_H + 4);
   const topReserveH = COLUMN_HEADER_H + trendRegisterH;
+
+  const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
+  const canvasWidth = containerWidth > 0 ? containerWidth : CANVAS_WIDTH_INIT;
+  const layerHeight = (() => {
+    if (selectedProfile.ratio === 0 || layers.length === 0) return LAYER_HEIGHT_DEFAULT;
+    const totalH = Math.floor(canvasWidth / selectedProfile.ratio);
+    const available = totalH - topReserveH - 48;
+    return Math.max(LAYER_HEIGHT_MIN, Math.floor(available / layers.length));
+  })();
 
   const sortedTrends = useMemo(() =>
     [...trends].sort((a, b) =>
@@ -856,7 +859,6 @@ const ComplexityTimeline = () => {
         setShowTrendModal(false);
         setShowConnectionModal(false);
         setShowCutModal(false);
-        setShowExportMenu(false);
         setEditingColumn(null);
         setSelectedTrend(null);
         setEditingTrend(null);
@@ -877,20 +879,17 @@ const ComplexityTimeline = () => {
     const w = svgRef.current?.getBoundingClientRect().width ?? 0;
     if (w > 0) setSvgWidth(w);
     forceReflow();
-  }, [displayMode, canvasWidth]);
+  }, [displayMode, containerWidth]);
 
-  // ── Canvas width (manual + auto-expand) ──
-  // Grows the canvas automatically when something is placed near the current
-  // right edge, so the "endless" canvas never clips content. Users can also
-  // resize it directly with the toolbar slider.
-  const maybeGrowCanvas = useCallback((xPercent: number) => {
-    setCanvasWidth(w => {
-      const xPixel = (xPercent / 100) * w;
-      if (xPixel > w - CANVAS_EDGE_MARGIN) {
-        return Math.min(CANVAS_WIDTH_MAX, w + CANVAS_GROWTH_STEP);
-      }
-      return w;
-    });
+  // ── ResizeObserver: track the canvas area's actual pixel width ──
+  useEffect(() => {
+    const el = canvasAreaRef.current;
+    if (!el) return;
+    const update = () => setContainerWidth(Math.floor(el.clientWidth));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // ── Layer ops ──
@@ -931,7 +930,6 @@ const ComplexityTimeline = () => {
     } else {
       setEvents(ev => [...ev, data]);
     }
-    maybeGrowCanvas(data.x);
     setShowEventModal(false);
     setSelectedEvent(null);
   };
@@ -967,7 +965,6 @@ const ComplexityTimeline = () => {
     } else {
       setColumns(c => [...c, data]);
     }
-    maybeGrowCanvas(yearToPct(data.endYear));
     setShowColumnModal(false);
   };
   const addTrend  = (data: Trend)  => {
@@ -978,7 +975,6 @@ const ComplexityTimeline = () => {
       if (trends.length >= 6) { alert('Maximum of 6 trend bands allowed.'); return; }
       setTrends(t => [...t, data]);
     }
-    maybeGrowCanvas(yearToPct(data.endYear));
     setShowTrendModal(false);
     setSelectedTrend(null);
   };
@@ -1077,7 +1073,6 @@ const ComplexityTimeline = () => {
     const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
     const year = Math.round(pctToYear(x));
     setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
-    maybeGrowCanvas(x);
     setDraggingEvent(null);
   };
 
@@ -1113,7 +1108,7 @@ const ComplexityTimeline = () => {
       version: TIMELINE_FILE_VERSION,
       layers, startYear, endYear,
       events, connections, columns, trends, cuts,
-      layerHeight, canvasWidth, displayMode,
+      displayMode, selectedProfileId,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -1147,8 +1142,10 @@ const ComplexityTimeline = () => {
         setColumns(Array.isArray(data.columns) ? data.columns : []);
         setTrends(Array.isArray(data.trends) ? data.trends : []);
         setCuts(Array.isArray(data.cuts) ? data.cuts : []);
-        setLayerHeight(typeof data.layerHeight === 'number' ? data.layerHeight : LAYER_HEIGHT_DEFAULT);
-        setCanvasWidth(typeof data.canvasWidth === 'number' ? data.canvasWidth : CANVAS_WIDTH_INIT);
+        if (typeof data.selectedProfileId === 'string' &&
+            EXPORT_PROFILES.some(p => p.id === data.selectedProfileId)) {
+          setSelectedProfileId(data.selectedProfileId);
+        }
         setDisplayMode(
           data.version >= 3 && (data.displayMode === 'cards' || data.displayMode === 'strands')
             ? data.displayMode
@@ -1401,7 +1398,7 @@ const ComplexityTimeline = () => {
     }
   }
 
-  const exportPNG = async (profile: ExportProfile = EXPORT_PROFILES[0]) => {
+  const exportPNG = async (profile: ExportProfile) => {
     if (!timelineRef.current) return;
 
     try {
@@ -1423,7 +1420,7 @@ const ComplexityTimeline = () => {
     let offsetY = 0;
 
     if (profile.id === 'native' || profile.ratio === 0) {
-      const scale = 3;
+      const scale = Math.round(300 / 96); // ≈ 3× for 300dpi
       canvas.width  = rect.width  * scale;
       canvas.height = rect.height * scale;
       const ctx = canvas.getContext('2d')!;
@@ -1442,24 +1439,12 @@ const ComplexityTimeline = () => {
       const scaleToFitW = targetW / naturalW;
       const scaleToFitH = targetH / naturalH;
 
-      if (cropInstead) {
-        contentScale = Math.max(scaleToFitW, scaleToFitH);
-        offsetX = (targetW - naturalW * contentScale) / 2;
-        offsetY = (targetH - naturalH * contentScale) / 2;
-      } else {
-        // Letterbox (default)
-        contentScale = Math.min(scaleToFitW, scaleToFitH);
-        offsetX = (targetW - naturalW * contentScale) / 2;
-        offsetY = (targetH - naturalH * contentScale) / 2;
-      }
+      // Letterbox
+      contentScale = Math.min(scaleToFitW, scaleToFitH);
+      offsetX = (targetW - naturalW * contentScale) / 2;
+      offsetY = (targetH - naturalH * contentScale) / 2;
 
       const ctx = canvas.getContext('2d')!;
-      if (cropInstead) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, targetW, targetH);
-        ctx.clip();
-      }
       ctx.translate(offsetX, offsetY);
       ctx.scale(contentScale, contentScale);
 
@@ -1468,8 +1453,6 @@ const ComplexityTimeline = () => {
       const span  = endYear - startYear;
       if (displayMode === 'strands') drawStrandsMode(ctx, drawW, drawH, span, profile.fontScale);
       else drawCardsMode(ctx, drawW, drawH, span, profile.fontScale);
-
-      if (cropInstead) ctx.restore();
     }
 
     canvas.toBlob(blob => {
@@ -1556,30 +1539,9 @@ const ComplexityTimeline = () => {
         <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
           <Upload size={13} /> Load
         </button>
-        <div className="u-export-wrap">
-          <button className="u-btn u-btn--export" onClick={() => setShowExportMenu(v => !v)} title="Export as PNG image">
-            <Image size={13} /> Export
-          </button>
-          {showExportMenu && (
-            <div className="u-export-menu u-export-menu--profiles">
-              <label className="u-export-crop-row">
-                <input type="checkbox" checked={cropInstead} onChange={e => setCropInstead(e.target.checked)} />
-                {' '}Crop to fit (default: letterbox)
-              </label>
-              <div className="u-export-profile-list">
-                {EXPORT_PROFILES.map(p => (
-                  <button
-                    key={p.id}
-                    className="u-export-profile-btn"
-                    onClick={() => { exportPNG(p); setShowExportMenu(false); }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <button className="u-btn u-btn--export" onClick={() => exportPNG(selectedProfile)} title="Export as PNG image at 300dpi">
+          <Image size={13} /> Export
+        </button>
         <input
           ref={fileInputRef}
           type="file"
@@ -1614,23 +1576,17 @@ const ComplexityTimeline = () => {
           </div>
 
           <div className="u-width-controls">
-            <span className="u-year-label">Width</span>
-            <input className="u-width-slider" type="range"
-              min={CANVAS_WIDTH_MIN} max={Math.max(CANVAS_WIDTH_MAX, canvasWidth)} step={50}
-              value={canvasWidth}
-              onChange={e => setCanvasWidth(Number(e.target.value))}
-              title="Canvas width — drag to spread events out or pack them in" />
-            <span className="u-width-value">{canvasWidth}px</span>
-          </div>
-
-          <div className="u-width-controls">
-            <span className="u-year-label">Height</span>
-            <input className="u-width-slider" type="range"
-              min={LAYER_HEIGHT_MIN} max={LAYER_HEIGHT_MAX} step={10}
-              value={layerHeight}
-              onChange={e => setLayerHeight(Number(e.target.value))}
-              title="Row height — drag to give events more or less vertical room" />
-            <span className="u-width-value">{layerHeight}px</span>
+            <span className="u-year-label">Size</span>
+            <select
+              className="u-profile-select"
+              value={selectedProfileId}
+              onChange={e => setSelectedProfileId(e.target.value)}
+              title="Export size / aspect ratio"
+            >
+              {EXPORT_PROFILES.map(p => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="u-year-controls">
@@ -1645,7 +1601,7 @@ const ComplexityTimeline = () => {
       </div>
 
       {/* CANVAS */}
-      <div className="u-canvas-area">
+      <div className="u-canvas-area" ref={canvasAreaRef}>
         <div className="u-canvas-row" style={{ height: timelineHeight }}>
           {/* Sticky layer-title gutter — stays pinned during horizontal scroll,
               so titles never overlap events near the start date. */}
@@ -1678,7 +1634,7 @@ const ComplexityTimeline = () => {
           <div
             ref={timelineRef}
             className="u-timeline-wrap"
-            style={{ height: timelineHeight, width: layers.length > 0 ? canvasWidth : undefined }}
+            style={{ height: timelineHeight, width: layers.length > 0 ? '100%' : undefined }}
             onClick={handleTimelineClick}
             onDragOver={handleDragOver}
             onDrop={handleDrop}

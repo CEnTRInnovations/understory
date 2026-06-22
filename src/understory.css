@@ -209,6 +209,21 @@ h1, h2, h3 {
   color: var(--text-muted);
   min-width: 52px;
 }
+.u-profile-select {
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.75rem;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  padding: 2px 6px;
+  cursor: pointer;
+  height: 24px;
+}
+.u-profile-select:focus {
+  outline: none;
+  border-color: var(--btn-export, #6b8f71);
+}
 
 /* ── YEAR CONTROLS ── */
 .u-year-controls {
