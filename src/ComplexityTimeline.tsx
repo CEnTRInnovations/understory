@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
-import { computeLayerTops, hitTestLayer as _hitTestLayer } from './utils/layerMetrics';
+import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -344,19 +344,22 @@ function computeStrandConnectorGeometry(
   fromEv: TimelineEvent,
   toEv: TimelineEvent,
   w: number,
-  lh: number,
+  lTops: number[],
+  lHeights: number[],
   topH: number,
   fromOffset = 0,
   toOffset = 0,
 ): StrandConnGeom {
   const x1 = eventLeftPx(fromEv.x, w) + fromOffset;
   const x2 = eventLeftPx(toEv.x, w)   + toOffset;
-  const y1 = topH + fromEv.layer * lh + lh / 2;
-  const y2 = topH + toEv.layer   * lh + lh / 2;
+  const lhFrom = lHeights[fromEv.layer] ?? LAYER_HEIGHT_DEFAULT;
+  const lhTo   = lHeights[toEv.layer]   ?? LAYER_HEIGHT_DEFAULT;
+  const y1 = topH + (lTops[fromEv.layer] ?? 0) + lhFrom / 2;
+  const y2 = topH + (lTops[toEv.layer]   ?? 0) + lhTo   / 2;
   if (fromEv.layer === toEv.layer) {
     // Same strand: small arc above the line so lateral connections are legible
     const cx = (x1 + x2) / 2;
-    const cy = y1 - Math.min(lh * 0.25, Math.abs(x2 - x1) * 0.12);
+    const cy = y1 - Math.min(lhFrom * 0.25, Math.abs(x2 - x1) * 0.12);
     return { kind: 'quad', x1, y1, cx, cy, x2, y2 };
   }
   // Cross-strand: control points are (x1,midY) and (x2,midY) — all connectors in
@@ -808,11 +811,8 @@ const ComplexityTimeline = () => {
   const effectiveHeights: number[] = layers.map((_, i) =>
     layerHeights.length === layers.length ? layerHeights[i] : uniformLayerH
   );
-  // layerTops and _hitTestLayer are unused until Task 2; referenced here to satisfy noUnusedLocals.
-  // Task 2 will replace these references with real usages.
-  const layerTops = computeLayerTops(effectiveHeights); void layerTops; void _hitTestLayer;
+  const layerTops = computeLayerTops(effectiveHeights);
   const layersTotalH = effectiveHeights.reduce((s, h) => s + h, 0);
-  const layerHeight = uniformLayerH;
 
   const sortedTrends = useMemo(() =>
     [...trends].sort((a, b) =>
@@ -1040,13 +1040,13 @@ const ComplexityTimeline = () => {
     const rect = timelineRef.current.getBoundingClientRect();
     const x    = ((e.clientX - rect.left) / rect.width) * 100;
     const y    = e.clientY - rect.top - topReserveH;
-    const layer = Math.floor(y / layerHeight);
+    const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
-    const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
+    const yOffset = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
     const year = Math.round(pctToYear(x));
     setEditingEvent(null);
     setShowEventModal({ x, year, layer, yOffset });
-  }, [connectingFrom, layers.length, layerHeight, pctToYear, topReserveH]);
+  }, [connectingFrom, layers.length, layerTops, effectiveHeights, pctToYear, topReserveH]);
 
   // ── Event click ──
   const handleEventClick = (e: React.MouseEvent, i: number) => {
@@ -1093,9 +1093,9 @@ const ComplexityTimeline = () => {
     const rect  = timelineRef.current.getBoundingClientRect();
     const x     = ((e.clientX - rect.left) / rect.width) * 100;
     const y     = e.clientY - rect.top - topReserveH;
-    const layer = Math.floor(y / layerHeight);
+    const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
-    const yOffset = clampYOffset(y - layer * layerHeight, layerHeight);
+    const yOffset = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
     const year = Math.round(pctToYear(x));
     setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
     setDraggingEvent(null);
@@ -1112,7 +1112,7 @@ const ComplexityTimeline = () => {
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
-    const top     = topReserveH + ev.layer * layerHeight + ev.yOffset;
+    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
     const centerY = top + halfH;
     return {
       x: eventLeftPx(ev.x, rect.width),
@@ -1121,7 +1121,7 @@ const ComplexityTimeline = () => {
       bottom: centerY + halfH,
       halfWidth: halfW,
     };
-  }, [events, layerHeight, topReserveH]);
+  }, [events, layerTops, topReserveH]);
 
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
@@ -1231,7 +1231,7 @@ const ComplexityTimeline = () => {
 
     // Layer dividers + labels
     layers.forEach((lyr, i) => {
-      const y = topReserveH + i * layerHeight;
+      const y = topReserveH + layerTops[i];
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1268,7 +1268,7 @@ const ComplexityTimeline = () => {
     // Events (cards)
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
-      const y = topReserveH + ev.layer * layerHeight + ev.yOffset;
+      const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
       const cardEl = cardRefs.current[evi];
       const padding = 6; const lineHeight = 13;
       const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
@@ -1315,7 +1315,7 @@ const ComplexityTimeline = () => {
 
     // Strand lines (one per layer)
     layers.forEach((_, i) => {
-      const y = topReserveH + i * layerHeight + layerHeight / 2;
+      const y = topReserveH + layerTops[i] + effectiveHeights[i] / 2;
       ctx.save();
       ctx.strokeStyle = '#3E3B35'; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w - 10, y); ctx.stroke();
@@ -1343,7 +1343,7 @@ const ComplexityTimeline = () => {
       const toConns    = connAtEvent.get(conn.to)   ?? [];
       const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
       const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
-      const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerHeight, topReserveH, fromOffset, toOffset);
+      const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerTops, effectiveHeights, topReserveH, fromOffset, toOffset);
       ctx.save();
       ctx.strokeStyle = '#7E7C78'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]);
       ctx.beginPath();
@@ -1356,7 +1356,7 @@ const ComplexityTimeline = () => {
 
     // Event labels (plain text, alternating above/below per strand)
     layers.forEach((_, layerIdx) => {
-      const strandY = topReserveH + layerIdx * layerHeight + layerHeight / 2;
+      const strandY = topReserveH + layerTops[layerIdx] + effectiveHeights[layerIdx] / 2;
       const layerEvts = events
         .map((e, globalIdx) => ({ e, globalIdx }))
         .filter(({ e }) => e.layer === layerIdx);
@@ -1379,7 +1379,7 @@ const ComplexityTimeline = () => {
 
     // Layer labels (left-edge, like cards mode)
     layers.forEach((lyr, i) => {
-      const y = topReserveH + i * layerHeight;
+      const y = topReserveH + layerTops[i];
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1637,7 +1637,7 @@ const ComplexityTimeline = () => {
           {layers.length > 0 && (
             <div className="u-layer-gutter" style={{ height: timelineHeight }}>
               {layers.map((layer, i) => (
-                <div key={i} className="u-layer-gutter-row" style={{ top: topReserveH + i * layerHeight, height: layerHeight }}>
+                <div key={i} className="u-layer-gutter-row" style={{ top: topReserveH + layerTops[i], height: effectiveHeights[i] }}>
                   <div className="u-layer-label">
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
@@ -1703,7 +1703,7 @@ const ComplexityTimeline = () => {
 
                 {/* Strand lines — one per layer, rendered in strands mode */}
                 {displayMode === 'strands' && layers.map((_lyr, i) => {
-                  const y = topReserveH + i * layerHeight + layerHeight / 2;
+                  const y = topReserveH + layerTops[i] + effectiveHeights[i] / 2;
                   const color = '#3E3B35';
                   return (
                     <line key={`strand-${i}`}
@@ -1737,7 +1737,7 @@ const ComplexityTimeline = () => {
                       const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
                       const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
                       path = strandGeomToSVGPath(
-                        computeStrandConnectorGeometry(events[conn.from], events[conn.to], svgW, layerHeight, topReserveH, fromOffset, toOffset)
+                        computeStrandConnectorGeometry(events[conn.from], events[conn.to], svgW, layerTops, effectiveHeights, topReserveH, fromOffset, toOffset)
                       );
                     } else {
                       const from = getEventPos(conn.from);
@@ -1779,7 +1779,7 @@ const ComplexityTimeline = () => {
                 if (displayMode === 'strands') {
                   const svgW = svgWidth || canvasWidth;
                   const geom = computeStrandConnectorGeometry(
-                    events[conn.from], events[conn.to], svgW, layerHeight, topReserveH
+                    events[conn.from], events[conn.to], svgW, layerTops, effectiveHeights, topReserveH
                   );
                   // midpoint of bezier at t=0.5
                   if (geom.kind === 'quad') {
@@ -1826,7 +1826,7 @@ const ComplexityTimeline = () => {
               {/* Layer row divider lines (titles live in the sticky gutter) */}
               {layers.map((_, i) => (
                 <div key={i} className="u-layer-row"
-                  style={{ top: topReserveH + i * layerHeight, height: layerHeight }} />
+                  style={{ top: topReserveH + layerTops[i], height: effectiveHeights[i] }} />
               ))}
 
               {/* Year axis */}
@@ -1968,7 +1968,7 @@ const ComplexityTimeline = () => {
                     key={i}
                     draggable
                     className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
-                    style={{ left: eventLeft(event.x), top: `${topReserveH + event.layer * layerHeight + event.yOffset}px` }}
+                    style={{ left: eventLeft(event.x), top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px` }}
                     onDragStart={e => handleDragStart(e, i)}
                     onClick={e => handleEventClick(e, i)}
                     onDoubleClick={e => {
@@ -2046,7 +2046,7 @@ const ComplexityTimeline = () => {
 
               {/* Strands mode event labels */}
               {displayMode === 'strands' && layers.map((_, layerIdx) => {
-                const strandY = topReserveH + layerIdx * layerHeight + layerHeight / 2;
+                const strandY = topReserveH + layerTops[layerIdx] + effectiveHeights[layerIdx] / 2;
                 const layerEvts = events
                   .map((e, globalIdx) => ({ e, globalIdx }))
                   .filter(({ e }) => e.layer === layerIdx);
