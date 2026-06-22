@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
-import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
+import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, TrendingUp, Scissors } from 'lucide-react';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -89,7 +89,7 @@ const EVENT_EDGE_PADDING = 70; // px
 const EVENT_CARD_HALF_HEIGHT = 18; // px
 
 // ── Trend / column header register ──
-const COLUMN_HEADER_H  = 26; // px — fixed column-label row above trend register
+const COLUMN_HEADER_H  = 0; // px — fixed column-label row above trend register
 const TREND_BAND_H     = 14; // px — uniform height for all trend bands
 const TREND_REGISTER_H = 20; // px — minimum register height (fits 0–1 trends)
 const TREND_SLOT_H     = TREND_BAND_H + 2; // 16px — band height + inter-slot gap
@@ -790,7 +790,6 @@ const ComplexityTimeline = () => {
   const [editingEvent, setEditingEvent]       = useState<number | null>(null);
   const [pendingConnection, setPendingConnection] = useState<{ from: number; to: number; fromSide?: Side; toSide?: Side } | null>(null);
 
-  const [selectedColumn, setSelectedColumn]   = useState<number | null>(null);
   const [editingColumn, setEditingColumn]     = useState<number | null>(null);
 
   const [selectedTrend, setSelectedTrend]     = useState<number | null>(null);
@@ -880,7 +879,6 @@ const ComplexityTimeline = () => {
         setShowConnectionModal(false);
         setShowCutModal(false);
         setShowExportMenu(false);
-        setSelectedColumn(null);
         setEditingColumn(null);
         setSelectedTrend(null);
         setEditingTrend(null);
@@ -993,11 +991,6 @@ const ComplexityTimeline = () => {
     }
     maybeGrowCanvas(yearToPct(data.endYear));
     setShowColumnModal(false);
-    setSelectedColumn(null);
-  };
-  const deleteColumn = (i: number) => {
-    setColumns(c => c.filter((_, idx) => idx !== i));
-    setSelectedColumn(null);
   };
   const addTrend  = (data: Trend)  => {
     if (editingTrend !== null) {
@@ -1040,7 +1033,6 @@ const ComplexityTimeline = () => {
     // stopPropagation; detect them by target type so we don't open Add Event.
     if (e.target instanceof SVGElement) return;
     setSelectedEvent(null);
-    setSelectedColumn(null);
     setSelectedTrend(null);
     setSelectedConnection(null);
     setSelectedCut(null);
@@ -1231,8 +1223,6 @@ const ComplexityTimeline = () => {
       const cw = (yearToPct(col.endYear) / 100) * w - x;
       ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
-      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, 18);
     });
 
     // Layer dividers + labels
@@ -1315,8 +1305,6 @@ const ComplexityTimeline = () => {
       const cw = (yearToPct(col.endYear) / 100) * w - x;
       ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
-      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, 18);
     });
 
     // Strand lines (one per layer)
@@ -1571,9 +1559,6 @@ const ComplexityTimeline = () => {
         </button>
         <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal(true); }}>
           <Plus size={13} /> Add Event
-        </button>
-        <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-          <Columns size={13} /> Add Column
         </button>
         <button className="u-btn u-btn--trend" onClick={() => { setEditingTrend(null); setShowTrendModal(true); }}>
           <TrendingUp size={13} /> Add Trend
@@ -1869,35 +1854,6 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {/* Column header row — labels pinned to the top register */}
-              <div className="u-col-header-row">
-                {columns.map((col, i) => {
-                  const left  = yearToPct(col.startYear);
-                  const width = yearToPct(col.endYear) - left;
-                  return (
-                    <div key={i} style={{ position: 'absolute', left: `${left}%`, width: `${width}%` }}>
-                      <div className="u-col-header-label"
-                        style={{ left: '50%' }}
-                        onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
-                        onDoubleClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
-                        {col.label}
-                      </div>
-                      {selectedColumn === i && (
-                        <div className="u-col-actions" style={{ top: '100%', left: '50%' }}>
-                          <button className="u-event-action-btn" title="Edit column"
-                            onClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
-                            <Edit2 size={13} />
-                          </button>
-                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete column"
-                            onClick={e => { e.stopPropagation(); deleteColumn(i); }}>
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
 
               {/* Hairline separator between header/trend register and event zone */}
               <div className="u-content-separator" style={{ top: topReserveH }} />
