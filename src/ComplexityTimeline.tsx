@@ -812,21 +812,25 @@ const ComplexityTimeline = () => {
 
   const timelineHeight = topReserveH + (layers.length > 0 ? layers.length * layerHeight + 48 : 280);
 
+  // Snap the visual left edge to the decade that contains startYear, so the
+  // full decade is always visible even when startYear falls mid-decade.
+  const displayStartYear = Math.floor(startYear / 10) * 10;
+
   // ── Cut-aware year ↔ percentage conversion, memoized against current scale ──
   const yearToPct = useCallback(
-    (year: number) => yearToXWithCuts(year, startYear, endYear, cuts),
-    [startYear, endYear, cuts]
+    (year: number) => yearToXWithCuts(year, displayStartYear, endYear, cuts),
+    [displayStartYear, endYear, cuts]
   );
   const pctToYear = useCallback(
-    (pct: number) => xToYearWithCuts(pct, startYear, endYear, cuts),
-    [startYear, endYear, cuts]
+    (pct: number) => xToYearWithCuts(pct, displayStartYear, endYear, cuts),
+    [displayStartYear, endYear, cuts]
   );
 
   // Keep cached event.x positions correct when the scale (start/end year or
   // cuts) changes after events have already been placed.
   useEffect(() => {
-    setEvents(ev => ev.map(e => ({ ...e, x: yearToXWithCuts(e.year, startYear, endYear, cuts) })));
-  }, [startYear, endYear, cuts]);
+    setEvents(ev => ev.map(e => ({ ...e, x: yearToXWithCuts(e.year, displayStartYear, endYear, cuts) })));
+  }, [displayStartYear, endYear, cuts]);
 
   // ── Warn before leaving the page ──
   // A trackpad swipe that overshoots while scrolling the timeline can be
@@ -1264,8 +1268,7 @@ const ComplexityTimeline = () => {
     const axY  = h - 48;
     ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(w, axY); ctx.stroke();
-    const decadeStart = Math.ceil(startYear / 10) * 10;
-    for (let yr = startYear; yr <= endYear; yr === startYear ? yr = decadeStart : yr += 10) {
+    for (let yr = displayStartYear; yr <= endYear; yr += 10) {
       if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
       const x = (yearToPct(yr) / 100) * w;
       ctx.strokeStyle = '#8A867E';
@@ -1388,8 +1391,7 @@ const ComplexityTimeline = () => {
     const axY  = h - 48;
     ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(w, axY); ctx.stroke();
-    const decadeStart = Math.ceil(startYear / 10) * 10;
-    for (let yr = startYear; yr <= endYear; yr === startYear ? yr = decadeStart : yr += 10) {
+    for (let yr = displayStartYear; yr <= endYear; yr += 10) {
       if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
       const x = (yearToPct(yr) / 100) * w;
       ctx.strokeStyle = '#8A867E';
@@ -1468,14 +1470,11 @@ const ComplexityTimeline = () => {
   // ── Year axis tick step ──
   // Always includes both startYear and endYear, even when endYear doesn't
   // fall on an even multiple of tickStep.
-  const yearSpan = endYear - startYear;
-  const yearTicks: number[] = [startYear];
+  const yearSpan = endYear - displayStartYear;
+  const yearTicks: number[] = [];
   if (yearSpan > 0) {
-    const decadeStart = Math.ceil(startYear / 10) * 10;
-    for (let yr = decadeStart; yr < endYear; yr += 10) {
-      if (!cuts.some(c => yr > c.startYear && yr < c.endYear) && yr !== startYear) {
-        yearTicks.push(yr);
-      }
+    for (let yr = displayStartYear; yr < endYear; yr += 10) {
+      if (!cuts.some(c => yr > c.startYear && yr < c.endYear)) yearTicks.push(yr);
     }
   }
   if (!yearTicks.includes(endYear)) yearTicks.push(endYear);
