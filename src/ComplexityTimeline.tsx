@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
+import { computeLayerTops, hitTestLayer as _hitTestLayer } from './utils/layerMetrics';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -743,6 +744,7 @@ const CutModal = ({
 // ── Main Component ──
 const ComplexityTimeline = () => {
   const [layers, setLayers]           = useState<string[]>([]);
+  const [layerHeights, setLayerHeights] = useState<number[]>([]);
   const [startYear, setStartYear]     = useState(2008);
   const [endYear, setEndYear]         = useState(2025);
   const [events, setEvents]           = useState<TimelineEvent[]>([]);
@@ -796,12 +798,21 @@ const ComplexityTimeline = () => {
 
   const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
   const canvasWidth = containerWidth > 0 ? containerWidth : CANVAS_WIDTH_INIT;
-  const layerHeight = (() => {
+  const uniformLayerH = (() => {
     if (selectedProfile.ratio === 0 || layers.length === 0) return LAYER_HEIGHT_DEFAULT;
     const totalH = Math.floor(canvasWidth / selectedProfile.ratio);
     const available = totalH - topReserveH - 48;
     return Math.max(LAYER_HEIGHT_MIN, Math.floor(available / layers.length));
   })();
+
+  const effectiveHeights: number[] = layers.map((_, i) =>
+    layerHeights.length === layers.length ? layerHeights[i] : uniformLayerH
+  );
+  // layerTops and _hitTestLayer are unused until Task 2; referenced here to satisfy noUnusedLocals.
+  // Task 2 will replace these references with real usages.
+  const layerTops = computeLayerTops(effectiveHeights); void layerTops; void _hitTestLayer;
+  const layersTotalH = effectiveHeights.reduce((s, h) => s + h, 0);
+  const layerHeight = uniformLayerH;
 
   const sortedTrends = useMemo(() =>
     [...trends].sort((a, b) =>
@@ -811,7 +822,7 @@ const ComplexityTimeline = () => {
     ),
   [trends]);
 
-  const timelineHeight = topReserveH + (layers.length > 0 ? layers.length * layerHeight + 48 : 280);
+  const timelineHeight = topReserveH + (layers.length > 0 ? layersTotalH + 48 : 280);
 
   // Snap the visual left edge to the decade that contains startYear, so the
   // full decade is always visible even when startYear falls mid-decade.
@@ -902,9 +913,11 @@ const ComplexityTimeline = () => {
   const saveLayer = (name: string) => {
     if (editingLayer !== null) {
       setLayers(l => l.map((lyr, i) => i === editingLayer ? name : lyr));
+      // layerHeights unchanged — rename only
       setEditingLayer(null);
     } else {
       setLayers(l => [...l, name]);
+      setLayerHeights(h => [...h, uniformLayerH]);
     }
     setShowLayerModal(false);
   };
@@ -923,6 +936,7 @@ const ComplexityTimeline = () => {
       .filter(c => indexMap.has(c.from) && indexMap.has(c.to))
       .map(c => ({ ...c, from: indexMap.get(c.from)!, to: indexMap.get(c.to)! })));
     setLayers(l => l.filter((_, idx) => idx !== i));
+    setLayerHeights(h => h.filter((_, idx) => idx !== i));
     setSelectedEvent(null);
     setSelectedConnection(null);
     if (editingLayer === i) { setEditingLayer(null); setShowLayerModal(false); }
@@ -1120,6 +1134,7 @@ const ComplexityTimeline = () => {
       layers, startYear, endYear,
       events, connections, columns, trends, cuts,
       displayMode, selectedProfileId,
+      layerHeights,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -1146,6 +1161,7 @@ const ComplexityTimeline = () => {
           return;
         }
         setLayers(data.layers ?? []);
+        setLayerHeights(Array.isArray(data.layerHeights) ? data.layerHeights : []);
         setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
         setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
         setEvents(Array.isArray(data.events) ? data.events : []);
