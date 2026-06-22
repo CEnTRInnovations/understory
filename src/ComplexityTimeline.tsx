@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
-import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, TrendingUp, Scissors } from 'lucide-react';
+import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -84,7 +84,7 @@ const EVENT_EDGE_PADDING = 70; // px
 const EVENT_CARD_HALF_HEIGHT = 18; // px
 
 // ── Trend / column header register ──
-const COLUMN_HEADER_H  = 0; // px — fixed column-label row above trend register
+const COLUMN_HEADER_H  = 26; // px — column-label row below trend register
 const TREND_BAND_H     = 14; // px — uniform height for all trend bands
 const TREND_REGISTER_H = 20; // px — minimum register height (fits 0–1 trends)
 const TREND_SLOT_H     = TREND_BAND_H + 2; // 16px — band height + inter-slot gap
@@ -765,6 +765,7 @@ const ComplexityTimeline = () => {
   const [pendingConnection, setPendingConnection] = useState<{ from: number; to: number; fromSide?: Side; toSide?: Side } | null>(null);
 
   const [editingColumn, setEditingColumn]     = useState<number | null>(null);
+  const [selectedColumn, setSelectedColumn]   = useState<number | null>(null);
 
   const [selectedTrend, setSelectedTrend]     = useState<number | null>(null);
   const [editingTrend, setEditingTrend]       = useState<number | null>(null);
@@ -963,6 +964,11 @@ const ComplexityTimeline = () => {
   };
 
   // ── Column / Trend ops ──
+  const deleteColumn = (i: number) => {
+    setColumns(c => c.filter((_, idx) => idx !== i));
+    setSelectedColumn(null);
+  };
+
   const addColumn = (data: Column) => {
     if (editingColumn !== null) {
       setColumns(c => c.map((col, i) => i === editingColumn ? data : col));
@@ -1203,6 +1209,8 @@ const ComplexityTimeline = () => {
       const cw = (yearToPct(col.endYear) / 100) * w - x;
       ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
+      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, trendRegisterH + 18);
     });
 
     // Layer dividers + labels
@@ -1224,7 +1232,7 @@ const ComplexityTimeline = () => {
 
     // Trend bands — staggered rows, sorted by start date
     sortedTrends.forEach((trend, k) => {
-      const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
+      const bandTop = 3 + k * TREND_SLOT_H;
       const x  = (yearToPct(trend.startYear) / 100) * w;
       const tw = (yearToPct(trend.endYear)   / 100) * w - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
@@ -1285,6 +1293,8 @@ const ComplexityTimeline = () => {
       const cw = (yearToPct(col.endYear) / 100) * w - x;
       ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
       ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
+      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
+      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, trendRegisterH + 18);
     });
 
     // Strand lines (one per layer)
@@ -1370,7 +1380,7 @@ const ComplexityTimeline = () => {
 
     // Trend bands — staggered rows, sorted by start date
     sortedTrends.forEach((trend, k) => {
-      const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
+      const bandTop = 3 + k * TREND_SLOT_H;
       const x  = (yearToPct(trend.startYear) / 100) * w;
       const tw = (yearToPct(trend.endYear)   / 100) * w - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
@@ -1526,6 +1536,9 @@ const ComplexityTimeline = () => {
         <button className="u-btn u-btn--trend" onClick={() => { setEditingTrend(null); setShowTrendModal(true); }}>
           <TrendingUp size={13} /> Add Trend
           <span style={{ fontSize: '0.65rem', opacity: 0.75 }}>({trends.length}/6)</span>
+        </button>
+        <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
+          <Columns size={13} /> Add Column
         </button>
         <button className="u-btn u-btn--cut" onClick={() => { setEditingCut(null); setShowCutModal(true); }}>
           <Scissors size={13} /> Add Cut
@@ -1841,7 +1854,7 @@ const ComplexityTimeline = () => {
                 const origIdx = trends.indexOf(trend);
                 const left  = yearToPct(trend.startYear);
                 const width = yearToPct(trend.endYear) - left;
-                const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
+                const bandTop = 3 + k * TREND_SLOT_H;
                 return (
                   <div key={k} className="u-trend-band" style={{
                     left: `${left}%`, width: `${width}%`,
@@ -1868,11 +1881,43 @@ const ComplexityTimeline = () => {
                 );
               })}
 
+              {/* Column label row — pinned below the trend register */}
+              {columns.length > 0 && (
+                <div className="u-col-header-row" style={{ top: trendRegisterH }}>
+                  {columns.map((col, i) => {
+                    const left  = yearToPct(col.startYear);
+                    const width = yearToPct(col.endYear) - left;
+                    return (
+                      <div key={i} style={{ position: 'absolute', left: `${left}%`, width: `${width}%` }}>
+                        <div className="u-col-header-label"
+                          style={{ left: '50%' }}
+                          onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
+                          onDoubleClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
+                          {col.label}
+                        </div>
+                        {selectedColumn === i && (
+                          <div className="u-col-actions" style={{ top: '100%', left: '50%' }}>
+                            <button className="u-event-action-btn" title="Edit column"
+                              onClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
+                              <Edit2 size={13} />
+                            </button>
+                            <button className="u-event-action-btn u-event-action-btn--danger" title="Delete column"
+                              onClick={e => { e.stopPropagation(); deleteColumn(i); }}>
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {displayMode === 'strands' && sortedTrends.map((trend, k) => {
                 const origIdx = trends.indexOf(trend);
                 const left    = yearToPct(trend.startYear);
                 const width   = yearToPct(trend.endYear) - left;
-                const bandTop = COLUMN_HEADER_H + 3 + k * TREND_SLOT_H;
+                const bandTop = 3 + k * TREND_SLOT_H;
                 return (
                   <div key={k} className="u-strand-trend-bar" style={{
                     left: `${left}%`, width: `${width}%`,

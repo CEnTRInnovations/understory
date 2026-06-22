@@ -462,7 +462,6 @@ h1, h2, h3 {
 }
 .u-col-header-row {
   position: absolute;
-  top: 0;
   left: 0; right: 0;
   height: 26px;
   pointer-events: none;
