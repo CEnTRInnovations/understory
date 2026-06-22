@@ -326,6 +326,7 @@ function computeStrandLabels(
 }
 
 function getContrastColor(hex: string): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return '#2a2825';
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
@@ -1100,7 +1101,7 @@ const ComplexityTimeline = () => {
 
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
-  // reason about older files (e.g. ones missing layerHeight/canvasWidth).
+  // reason about older files (e.g. ones missing selectedProfileId).
   const TIMELINE_FILE_VERSION = 3;
 
   const exportJSON = () => {
