@@ -557,14 +557,15 @@ h1, h2, h3 {
   position: absolute;
   display: flex;
   align-items: center;
-  font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.625rem;
-  letter-spacing: 0.03em;
-  /* opacity removed — background rgba set via inline style for transparency */
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   border-radius: 2px;
   pointer-events: auto;
   cursor: pointer;
-  padding-left: 4px;
+  padding-left: 6px;
   overflow: hidden;
 }
 .u-trend-band:hover { filter: brightness(1.1); }
@@ -727,10 +728,32 @@ h1, h2, h3 {
   border-radius: 3px;
   box-shadow: var(--shadow);
   display: flex;
+  flex-direction: column;
   gap: 1px;
   padding: 3px;
   white-space: nowrap;
   z-index: 10;
+}
+.u-event-actions-main {
+  display: flex;
+  gap: 1px;
+}
+.u-event-conn-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 2px;
+  margin-top: 1px;
+}
+.u-event-conn-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+  padding: 0 3px;
 }
 .u-event-action-btn {
   background: none;
@@ -892,9 +915,14 @@ h1, h2, h3 {
   position: absolute;
   display: flex;
   align-items: center;
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   /* opacity removed — background rgba set via inline style for transparency */
   cursor: pointer;
-  padding-left: 4px;
+  padding-left: 6px;
   overflow: hidden;
   border-radius: 2px;
 }

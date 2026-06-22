@@ -330,35 +330,13 @@ function computeStrandLabels(
   return positions;
 }
 
-// Converts a hex color to its darkest HSL stop (lightness 20%) for legible trend band labels.
-function darkestStop(hex: string): string {
+function getContrastColor(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const s = max === min ? 0 : l > 0.5
-    ? (max - min) / (2 - max - min)
-    : (max - min) / (max + min);
-  let h = 0;
-  if (max !== min) {
-    if (max === r)      h = ((g - b) / (max - min) + 6) % 6;
-    else if (max === g) h = (b - r) / (max - min) + 2;
-    else                h = (r - g) / (max - min) + 4;
-    h /= 6;
-  }
-  const L2 = 0.20;
-  const q = L2 < 0.5 ? L2 * (1 + s) : L2 + s - L2 * s;
-  const p = 2 * L2 - q;
-  const hue2rgb = (t: number) => {
-    if (t < 0) t += 1; if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
-  return `#${toHex(hue2rgb(h + 1 / 3))}${toHex(hue2rgb(h))}${toHex(hue2rgb(h - 1 / 3))}`;
+  // Relative luminance (sRGB, simplified linear approximation)
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.45 ? '#2a2825' : '#f5f3ef';
 }
 
 type StrandConnGeom =
@@ -1249,9 +1227,10 @@ const ComplexityTimeline = () => {
       const tw = (yearToPct(trend.endYear)   / 100) * w - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
       ctx.fillRect(x, bandTop, tw, TREND_BAND_H); ctx.restore();
-      ctx.fillStyle = darkestStop(trend.color); ctx.font = scaledFont(10, fontScale);
+      ctx.fillStyle = getContrastColor(trend.color);
+      ctx.font = scaledFont(9, fontScale);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(trend.label, x + 4, bandTop + TREND_BAND_H / 2);
+      ctx.fillText(trend.label.toUpperCase(), x + 6, bandTop + TREND_BAND_H / 2 + 3);
       ctx.textBaseline = 'alphabetic';
     });
 
@@ -1395,9 +1374,10 @@ const ComplexityTimeline = () => {
       const tw = (yearToPct(trend.endYear)   / 100) * w - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
       ctx.fillRect(x, bandTop, tw, TREND_BAND_H); ctx.restore();
-      ctx.fillStyle = darkestStop(trend.color); ctx.font = scaledFont(10, fontScale);
+      ctx.fillStyle = getContrastColor(trend.color);
+      ctx.font = scaledFont(9, fontScale);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(trend.label, x + 4, bandTop + TREND_BAND_H / 2);
+      ctx.fillText(trend.label.toUpperCase(), x + 6, bandTop + TREND_BAND_H / 2 + 3);
       ctx.textBaseline = 'alphabetic';
     });
 
@@ -1911,7 +1891,7 @@ const ComplexityTimeline = () => {
                     left: `${left}%`, width: `${width}%`,
                     top: bandTop, height: TREND_BAND_H,
                     background: trend.color + '4D',
-                    color: darkestStop(trend.color),
+                    color: getContrastColor(trend.color),
                   }}
                     onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
                     onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
@@ -1942,7 +1922,7 @@ const ComplexityTimeline = () => {
                     left: `${left}%`, width: `${width}%`,
                     top: bandTop, height: TREND_BAND_H,
                     background: trend.color + '4D',
-                    color: darkestStop(trend.color),
+                    color: getContrastColor(trend.color),
                   }}
                     onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
                     onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
