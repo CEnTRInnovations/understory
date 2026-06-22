@@ -439,8 +439,8 @@ const EventModal = ({
   const [label, setLabel]       = useState(initialData?.label      ?? '');
   const [year, setYear]         = useState(initialData?.year       ?? midYear);
   const [layer, setLayer]       = useState(initialData?.layer      ?? 0);
-  const [color, setColor]       = useState(initialData?.color      ?? '#F6F2E7');
-  const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#3E3B35');
+  const [color, setColor]       = useState(initialData?.color      ?? '#fdf8f0');
+  const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#8B7355');
   const [style, setStyle]       = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
 
   const handleSave = () => {
