@@ -1320,9 +1320,15 @@ const ComplexityTimeline = () => {
   function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0) {
     ctx.fillStyle = BG_COLOR;
     ctx.fillRect(0, 0, w, h);
-    // Connections — halo then visible per connection so each connection's halo
-    // erases the previous connection's colored line at crossings (under-bridge effect).
-    connections.forEach(conn => {
+    // Connections — longest first so wide connections sit underneath local ones at crossings.
+    // Halo then visible per connection creates the under-bridge gap via painter's algorithm.
+    const cardRenderOrder = [...connections.keys()].sort((a, b) => {
+      const fa = getEventPos(connections[a].from), ta = getEventPos(connections[a].to);
+      const fb = getEventPos(connections[b].from), tb = getEventPos(connections[b].to);
+      return Math.hypot(tb.x - fb.x, tb.y - fb.y) - Math.hypot(ta.x - fa.x, ta.y - fa.y);
+    });
+    cardRenderOrder.forEach(ci => {
+      const conn = connections[ci];
       const from = getEventPos(conn.from);
       const to   = getEventPos(conn.to);
       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
@@ -1888,7 +1894,22 @@ const ComplexityTimeline = () => {
                   }
                   const svgW = svgWidth || canvasWidth;
 
-                  return connections.map((conn, i) => {
+                  // In cards mode, render longest connections first so they sit underneath
+                  // shorter local connections at crossings. Strands mode keeps original order
+                  // because connAtEvent offset-spreading depends on stable insertion order.
+                  const renderOrder: number[] = displayMode === 'strands'
+                    ? connections.map((_, idx) => idx)
+                    : [...connections.keys()].sort((a, b) => {
+                        const fa = getEventPos(connections[a].from);
+                        const ta = getEventPos(connections[a].to);
+                        const fb = getEventPos(connections[b].from);
+                        const tb = getEventPos(connections[b].to);
+                        return Math.hypot(tb.x - fb.x, tb.y - fb.y) -
+                               Math.hypot(ta.x - fa.x, ta.y - fa.y);
+                      });
+
+                  return renderOrder.map(i => {
+                    const conn = connections[i];
                     let path: string;
                     if (displayMode === 'strands') {
                       const fromConns  = connAtEvent.get(conn.from) ?? [];
