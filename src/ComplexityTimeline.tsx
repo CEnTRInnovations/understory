@@ -1895,6 +1895,15 @@ const ComplexityTimeline = () => {
                                      conn.from === selectedEvent || conn.to === selectedEvent;
                     return (
                       <g key={i}>
+                        {/* Halo mask — only in cards mode; gives crossing lines an under-bridge look */}
+                        {displayMode !== 'strands' && (
+                          <path d={path}
+                            stroke={BG_COLOR}
+                            strokeWidth={(conn.width ?? 2) + 6}
+                            fill="none"
+                            strokeLinecap="round"
+                          />
+                        )}
                         <path d={path}
                           stroke={displayMode === 'strands' ? '#7E7C78' : conn.color}
                           strokeWidth={displayMode === 'strands' ? 1 : conn.width}
