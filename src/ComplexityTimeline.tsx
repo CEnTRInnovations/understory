@@ -1935,7 +1935,7 @@ const ComplexityTimeline = () => {
                           <g key={i}>
                             <path d={path}
                               stroke={displayMode === 'strands' ? '#7E7C78' : conn.color}
-                              strokeWidth={displayMode === 'strands' ? 1 : conn.width}
+                              strokeWidth={displayMode === 'strands' ? 1 : (conn.width ?? 2)}
                               strokeOpacity={displayMode === 'strands' ? (isActive ? 0.35 : 0.1) : 1}
                               fill="none"
                               strokeDasharray={displayMode === 'strands' ? '2 4' : (conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined)}
@@ -1944,7 +1944,7 @@ const ComplexityTimeline = () => {
                             {/* Invisible wide hit area — the SVG overlay has
                                 pointer-events: none, so we re-enable it just on
                                 this path to make the thin visible line clickable. */}
-                            <path d={path} stroke="transparent" strokeWidth={Math.max(16, conn.width + 14)} fill="none"
+                            <path d={path} stroke="transparent" strokeWidth={Math.max(16, (conn.width ?? 2) + 14)} fill="none"
                               style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                               onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
                               onDoubleClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }} />
