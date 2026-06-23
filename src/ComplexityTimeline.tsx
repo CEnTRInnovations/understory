@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
-import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors } from 'lucide-react';
+import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors, GripVertical } from 'lucide-react';
 import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
 import './understory.css';
 
@@ -750,6 +750,16 @@ const ComplexityTimeline = () => {
   const [layerHeights, setLayerHeights] = useState<number[]>([]);
   const [resizingLayer, setResizingLayer] = useState<number | null>(null);
   const resizeStartRef = useRef<{ clientY: number; heights: number[] } | null>(null);
+  const [draggingLayer, setDraggingLayer] = useState<number | null>(null);
+  const [dragOverLayer, setDragOverLayer] = useState<number | null>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef<{
+    fromIdx: number;
+    overIdx: number;
+  } | null>(null);
+  const topReserveHRef = useRef(0);
+  const layerTopsRef = useRef<number[]>([]);
+  const effectiveHeightsRef = useRef<number[]>([]);
   const [startYear, setStartYear]     = useState(2008);
   const [endYear, setEndYear]         = useState(2025);
   const [events, setEvents]           = useState<TimelineEvent[]>([]);
@@ -815,6 +825,9 @@ const ComplexityTimeline = () => {
   );
   const layerTops = computeLayerTops(effectiveHeights);
   const layersTotalH = effectiveHeights.reduce((s, h) => s + h, 0);
+  topReserveHRef.current = topReserveH;
+  layerTopsRef.current = layerTops;
+  effectiveHeightsRef.current = effectiveHeights;
 
   const sortedTrends = useMemo(() =>
     [...trends].sort((a, b) =>
@@ -943,6 +956,71 @@ const ComplexityTimeline = () => {
     setSelectedConnection(null);
     if (editingLayer === i) { setEditingLayer(null); setShowLayerModal(false); }
   };
+
+  const reorderLayers = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const newLayers = [...layers];
+    const newHeights = [...effectiveHeights];
+    const [movedLayer]  = newLayers.splice(fromIdx, 1);
+    const [movedHeight] = newHeights.splice(fromIdx, 1);
+    newLayers.splice(toIdx, 0, movedLayer);
+    newHeights.splice(toIdx, 0, movedHeight);
+    // Update event.layer indices:
+    // Events in fromIdx move to toIdx; events between the two shift by ±1
+    setEvents(evs => evs.map(ev => {
+      const l = ev.layer;
+      if (l === fromIdx) return { ...ev, layer: toIdx };
+      if (fromIdx < toIdx && l > fromIdx && l <= toIdx) return { ...ev, layer: l - 1 };
+      if (fromIdx > toIdx && l >= toIdx && l < fromIdx) return { ...ev, layer: l + 1 };
+      return ev;
+    }));
+    setLayers(newLayers);
+    setLayerHeights(newHeights);
+  };
+
+  const handleLayerGripMouseDown = (e: React.MouseEvent, i: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragStateRef.current = { fromIdx: i, overIdx: i };
+    setDraggingLayer(i);
+    setDragOverLayer(i);
+    document.body.classList.add('u-dragging-layer');
+  };
+
+  useEffect(() => {
+    if (draggingLayer === null) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!gutterRef.current || !dragStateRef.current) return;
+      const gutterRect = gutterRef.current.getBoundingClientRect();
+      const y = e.clientY - gutterRect.top - topReserveHRef.current;
+      const over = hitTestLayer(y, layerTopsRef.current, effectiveHeightsRef.current);
+      const clamped = Math.max(0, Math.min(layerTopsRef.current.length - 1,
+        over < 0 ? 0 : over >= layerTopsRef.current.length ? layerTopsRef.current.length - 1 : over
+      ));
+      dragStateRef.current.overIdx = clamped;
+      setDragOverLayer(clamped);
+    };
+
+    const handleMouseUp = () => {
+      document.body.classList.remove('u-dragging-layer');
+      const state = dragStateRef.current;
+      dragStateRef.current = null;
+      setDraggingLayer(null);
+      setDragOverLayer(null);
+      if (state && state.fromIdx !== state.overIdx) {
+        reorderLayers(state.fromIdx, state.overIdx);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingLayer]);
 
   const handleResizeHandleMouseDown = (e: React.MouseEvent, i: number) => {
     e.preventDefault();
@@ -1676,14 +1754,26 @@ const ComplexityTimeline = () => {
           {/* Sticky layer-title gutter — stays pinned during horizontal scroll,
               so titles never overlap events near the start date. */}
           {layers.length > 0 && (
-            <div className="u-layer-gutter" style={{ height: timelineHeight }}>
+            <div ref={gutterRef} className="u-layer-gutter" style={{ height: timelineHeight }}>
               {layers.map((layer, i) => (
                 <div
                   key={i}
-                  className={`u-layer-gutter-row${resizingLayer === i ? ' u-layer-gutter-row--resizing' : ''}`}
+                  className={[
+                    'u-layer-gutter-row',
+                    resizingLayer === i ? 'u-layer-gutter-row--resizing' : '',
+                    draggingLayer === i ? 'u-layer-gutter-row--dragging' : '',
+                    dragOverLayer === i && draggingLayer !== i ? 'u-layer-gutter-row--drag-over' : '',
+                  ].filter(Boolean).join(' ')}
                   style={{ top: topReserveH + layerTops[i], height: effectiveHeights[i] }}
                 >
                   <div className="u-layer-label">
+                    <div
+                      className="u-layer-drag-grip"
+                      onMouseDown={e => handleLayerGripMouseDown(e, i)}
+                      title="Drag to reorder layer"
+                    >
+                      <GripVertical size={12} />
+                    </div>
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
                       title="Click to rename this layer">

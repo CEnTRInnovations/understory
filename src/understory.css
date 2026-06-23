@@ -410,6 +410,35 @@ body.u-resizing-layer {
   user-select: none;
 }
 
+.u-layer-drag-grip {
+  cursor: grab;
+  color: var(--text-muted, #8A867E);
+  opacity: 0.4;
+  padding: 0 3px 0 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.u-layer-drag-grip:hover {
+  opacity: 0.8;
+}
+
+.u-layer-gutter-row--dragging {
+  opacity: 0.4;
+}
+
+.u-layer-gutter-row--drag-over {
+  background: rgba(62, 59, 53, 0.06);
+  border-top: 2px solid rgba(62, 59, 53, 0.35);
+}
+
+body.u-dragging-layer {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
 /* ── EMPTY STATE ── */
 .u-empty {
   display: flex;
