@@ -386,6 +386,30 @@ h1, h2, h3 {
   padding-top: 0.5rem;
 }
 
+.u-layer-resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 2;
+}
+
+.u-layer-resize-handle:hover,
+.u-layer-resize-handle--active {
+  background: rgba(62, 59, 53, 0.12);
+}
+
+.u-layer-gutter-row--resizing {
+  background: rgba(62, 59, 53, 0.04);
+}
+
+body.u-resizing-layer {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+
 /* ── EMPTY STATE ── */
 .u-empty {
   display: flex;

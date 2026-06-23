@@ -748,6 +748,8 @@ const CutModal = ({
 const ComplexityTimeline = () => {
   const [layers, setLayers]           = useState<string[]>([]);
   const [layerHeights, setLayerHeights] = useState<number[]>([]);
+  const [resizingLayer, setResizingLayer] = useState<number | null>(null);
+  const resizeStartRef = useRef<{ clientY: number; heights: number[] } | null>(null);
   const [startYear, setStartYear]     = useState(2008);
   const [endYear, setEndYear]         = useState(2025);
   const [events, setEvents]           = useState<TimelineEvent[]>([]);
@@ -941,6 +943,45 @@ const ComplexityTimeline = () => {
     setSelectedConnection(null);
     if (editingLayer === i) { setEditingLayer(null); setShowLayerModal(false); }
   };
+
+  const handleResizeHandleMouseDown = (e: React.MouseEvent, i: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeStartRef.current = { clientY: e.clientY, heights: [...effectiveHeights] };
+    setResizingLayer(i);
+    document.body.classList.add('u-resizing-layer');
+  };
+
+  useEffect(() => {
+    if (resizingLayer === null) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const start = resizeStartRef.current;
+      if (!start || resizingLayer + 1 >= start.heights.length) return;
+      const dy = e.clientY - start.clientY;
+      const hi  = start.heights[resizingLayer];
+      const hi1 = start.heights[resizingLayer + 1];
+      // Clamp so neither layer goes below LAYER_HEIGHT_MIN
+      const delta = Math.max(LAYER_HEIGHT_MIN - hi, Math.min(hi1 - LAYER_HEIGHT_MIN, dy));
+      const newHeights = [...start.heights];
+      newHeights[resizingLayer]     = hi  + delta;
+      newHeights[resizingLayer + 1] = hi1 - delta;
+      setLayerHeights(newHeights);
+    };
+
+    const handleMouseUp = () => {
+      setResizingLayer(null);
+      resizeStartRef.current = null;
+      document.body.classList.remove('u-resizing-layer');
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingLayer]);
 
   // ── Event ops ──
   const addEvent = (data: TimelineEvent) => {
@@ -1637,7 +1678,11 @@ const ComplexityTimeline = () => {
           {layers.length > 0 && (
             <div className="u-layer-gutter" style={{ height: timelineHeight }}>
               {layers.map((layer, i) => (
-                <div key={i} className="u-layer-gutter-row" style={{ top: topReserveH + layerTops[i], height: effectiveHeights[i] }}>
+                <div
+                  key={i}
+                  className={`u-layer-gutter-row${resizingLayer === i ? ' u-layer-gutter-row--resizing' : ''}`}
+                  style={{ top: topReserveH + layerTops[i], height: effectiveHeights[i] }}
+                >
                   <div className="u-layer-label">
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
@@ -1655,6 +1700,13 @@ const ComplexityTimeline = () => {
                       <X size={11} />
                     </button>
                   </div>
+                  {i < layers.length - 1 && (
+                    <div
+                      className={`u-layer-resize-handle${resizingLayer === i ? ' u-layer-resize-handle--active' : ''}`}
+                      onMouseDown={e => handleResizeHandleMouseDown(e, i)}
+                      title="Drag to resize layers"
+                    />
+                  )}
                 </div>
               ))}
             </div>
