@@ -1318,17 +1318,32 @@ const ComplexityTimeline = () => {
   }
 
   function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0) {
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(0, 0, w, h);
     // Connections
     connections.forEach(conn => {
       const from = getEventPos(conn.from);
       const to   = getEventPos(conn.to);
       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+      const dash = conn.lineStyle === 'dashed' ? [6, 4] : conn.lineStyle === 'dotted' ? [2, 4] : [];
+
+      // Pass 1: cream halo — erases whatever crossed beneath this connection
+      ctx.save();
+      ctx.strokeStyle = BG_COLOR;
+      ctx.lineWidth   = (conn.width ?? 2) + 6;
+      ctx.setLineDash([]);
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2); ctx.stroke();
+      ctx.restore();
+
+      // Pass 2: visible connection line
       ctx.save();
       ctx.strokeStyle = conn.color;
       ctx.lineWidth   = conn.width;
-      ctx.setLineDash(conn.lineStyle === 'dashed' ? [6, 4] : conn.lineStyle === 'dotted' ? [2, 4] : []);
+      ctx.setLineDash(dash);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2); ctx.stroke();
       ctx.restore();
+
       if (conn.showArrow) {
         const angle = Math.atan2(y2 - c2y, x2 - c2x);
         const size  = conn.arrowSize ?? DEFAULT_ARROW_SIZE;
