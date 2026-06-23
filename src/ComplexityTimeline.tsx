@@ -111,6 +111,8 @@ const CONNECTOR_ELBOW_MAX = 90;
 // edge, so the line doesn't appear to touch/overlap the border.
 const ANCHOR_GAP = 5;
 
+const BG_COLOR = '#f4ede2'; // Matches --bg-main; used for connection halo strokes and canvas background
+
 function autoSide(center: { x: number; y: number }, other: { x: number; y: number }): Side {
   const dx = other.x - center.x;
   const dy = other.y - center.y;
