@@ -1320,12 +1320,13 @@ const ComplexityTimeline = () => {
   function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0) {
     ctx.fillStyle = BG_COLOR;
     ctx.fillRect(0, 0, w, h);
-    // Connections — two passes so halo of connection N never erases visible line of connection N-1
-    // Pass 1: all halos
+    // Connections — halo then visible per connection so each connection's halo
+    // erases the previous connection's colored line at crossings (under-bridge effect).
     connections.forEach(conn => {
       const from = getEventPos(conn.from);
       const to   = getEventPos(conn.to);
       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+      const dash = conn.lineStyle === 'dashed' ? [6, 4] : conn.lineStyle === 'dotted' ? [2, 4] : [];
       ctx.save();
       ctx.strokeStyle = BG_COLOR;
       ctx.lineWidth   = (conn.width ?? 2) + 6;
@@ -1333,20 +1334,12 @@ const ComplexityTimeline = () => {
       ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2); ctx.stroke();
       ctx.restore();
-    });
-    // Pass 2: all visible connection lines + arrowheads
-    connections.forEach(conn => {
-      const from = getEventPos(conn.from);
-      const to   = getEventPos(conn.to);
-      const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
-      const dash = conn.lineStyle === 'dashed' ? [6, 4] : conn.lineStyle === 'dotted' ? [2, 4] : [];
       ctx.save();
       ctx.strokeStyle = conn.color;
       ctx.lineWidth   = conn.width ?? 2;
       ctx.setLineDash(dash);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x2, y2); ctx.stroke();
       ctx.restore();
-
       if (conn.showArrow) {
         const angle = Math.atan2(y2 - c2y, x2 - c2x);
         const size  = conn.arrowSize ?? DEFAULT_ARROW_SIZE;
@@ -1895,7 +1888,7 @@ const ComplexityTimeline = () => {
                   }
                   const svgW = svgWidth || canvasWidth;
 
-                  const paths = connections.map((conn, i) => {
+                  return connections.map((conn, i) => {
                     let path: string;
                     if (displayMode === 'strands') {
                       const fromConns  = connAtEvent.get(conn.from) ?? [];
@@ -1911,48 +1904,38 @@ const ComplexityTimeline = () => {
                       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
                       path = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
                     }
-                    return { conn, i, path };
-                  });
-
-                  return (
-                    <>
-                      {/* Pass 1: all halos — rendered before any visible lines so no halo erases a prior connection */}
-                      {displayMode !== 'strands' && paths.map(({ conn, i, path }) => (
-                        <path key={`halo-${i}`} d={path}
-                          stroke={BG_COLOR}
-                          strokeWidth={(conn.width ?? 2) + 6}
+                    // Hover/select isolation: dim non-connected curves when an event is selected.
+                    const isActive = displayMode !== 'strands' || selectedEvent === null ||
+                                     conn.from === selectedEvent || conn.to === selectedEvent;
+                    return (
+                      <g key={i}>
+                        {/* Halo drawn first per connection so each successive connection's halo
+                            erases the previous connection's visible line at crossings — creating
+                            the under-bridge effect via painter's algorithm ordering. */}
+                        {displayMode !== 'strands' && (
+                          <path d={path}
+                            stroke={BG_COLOR}
+                            strokeWidth={(conn.width ?? 2) + 6}
+                            fill="none"
+                            strokeLinecap="round"
+                          />
+                        )}
+                        <path d={path}
+                          stroke={displayMode === 'strands' ? '#7E7C78' : conn.color}
+                          strokeWidth={displayMode === 'strands' ? 1 : (conn.width ?? 2)}
+                          strokeOpacity={displayMode === 'strands' ? (isActive ? 0.35 : 0.1) : 1}
                           fill="none"
-                          strokeLinecap="round"
+                          strokeDasharray={displayMode === 'strands' ? '2 4' : (conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined)}
+                          markerEnd={displayMode === 'strands' ? undefined : (conn.showArrow ? `url(#arrow-${i})` : undefined)}
                         />
-                      ))}
-                      {/* Pass 2: all visible paths + hit-targets */}
-                      {paths.map(({ conn, i, path }) => {
-                        // Hover/select isolation (§1.3a item 4): dim non-connected curves to 10% when
-                        // an event is selected, so the active event's connections read clearly.
-                        const isActive = displayMode !== 'strands' || selectedEvent === null ||
-                                         conn.from === selectedEvent || conn.to === selectedEvent;
-                        return (
-                          <g key={i}>
-                            <path d={path}
-                              stroke={displayMode === 'strands' ? '#7E7C78' : conn.color}
-                              strokeWidth={displayMode === 'strands' ? 1 : (conn.width ?? 2)}
-                              strokeOpacity={displayMode === 'strands' ? (isActive ? 0.35 : 0.1) : 1}
-                              fill="none"
-                              strokeDasharray={displayMode === 'strands' ? '2 4' : (conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined)}
-                              markerEnd={displayMode === 'strands' ? undefined : (conn.showArrow ? `url(#arrow-${i})` : undefined)}
-                            />
-                            {/* Invisible wide hit area — the SVG overlay has
-                                pointer-events: none, so we re-enable it just on
-                                this path to make the thin visible line clickable. */}
-                            <path d={path} stroke="transparent" strokeWidth={Math.max(16, (conn.width ?? 2) + 14)} fill="none"
-                              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
-                              onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
-                              onDoubleClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }} />
-                          </g>
-                        );
-                      })}
-                    </>
-                  );
+                        {/* Invisible wide hit area — pointer-events re-enabled so the thin visible line is clickable. */}
+                        <path d={path} stroke="transparent" strokeWidth={Math.max(16, (conn.width ?? 2) + 14)} fill="none"
+                          style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                          onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
+                          onDoubleClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }} />
+                      </g>
+                    );
+                  });
                 })()}
               </svg>
 
