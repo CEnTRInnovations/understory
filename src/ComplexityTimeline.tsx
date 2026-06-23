@@ -1439,6 +1439,8 @@ const ComplexityTimeline = () => {
   }
 
   function drawStrandsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0) {
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(0, 0, w, h);
     // Columns (same as cards mode)
     columns.forEach(col => {
       const x = (yearToPct(col.startYear) / 100) * w;
