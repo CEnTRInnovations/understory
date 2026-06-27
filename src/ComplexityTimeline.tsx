@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors, GripVertical } from 'lucide-react';
 import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
+import { syncAnchorPositions } from './utils/anchorPositioning';
 import './understory.css';
 
 // ── Logo (transparent background baked in) ──
@@ -20,6 +21,7 @@ type TimelineEvent = {
   style: 'normal' | 'italic';
   type: 'state' | 'anchor';
   width?: number; // states only; px; undefined = auto-size to content
+  xOffsetPct?: number; // anchors only: signed offset from parent state's x (% units)
 };
 
 type Connection = {
@@ -855,8 +857,19 @@ const ComplexityTimeline = () => {
   // Keep cached event.x positions correct when the scale (start/end year or
   // cuts) changes after events have already been placed.
   useEffect(() => {
-    setEvents(ev => ev.map(e => ({ ...e, x: yearToXWithCuts(e.year, displayStartYear, endYear, cuts) })));
-  }, [displayStartYear, endYear, cuts]);
+    setEvents(prevEvents => {
+      // Pass 1: update state x from year
+      const stateXValues = new Map<number, number>();
+      const withStates = prevEvents.map((e, i) => {
+        if ((e.type ?? 'state') !== 'state') return e;
+        const newX = yearToXWithCuts(e.year, displayStartYear, endYear, cuts);
+        stateXValues.set(i, newX);
+        return { ...e, x: newX };
+      });
+      // Pass 2: update anchor x from parent state + stored offset
+      return syncAnchorPositions(withStates, connections, stateXValues);
+    });
+  }, [displayStartYear, endYear, cuts, connections]);
 
   // ── Warn before leaving the page ──
   // A trackpad swipe that overshoots while scrolling the timeline can be
