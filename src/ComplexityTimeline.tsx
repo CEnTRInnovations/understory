@@ -360,18 +360,20 @@ const LayerModal = ({
 };
 
 const EventModal = ({
-  onClose, onSave, layers, startYear, endYear, yearToPct, initialData
+  onClose, onSave, layers, startYear, endYear, yearToPct, initialData, events
 }: {
   onClose: () => void;
-  onSave: (data: TimelineEvent) => void;
+  onSave: (data: TimelineEvent, linkedStateIdx?: number) => void;
   layers: string[];
   startYear: number;
   endYear: number;
   yearToPct: (year: number) => number;
   initialData?: Partial<TimelineEvent>;
+  events: TimelineEvent[];
 }) => {
   const midYear = Math.round((startYear + endYear) / 2);
   const eventType = initialData?.type ?? 'state';
+  const isNew = !initialData?.label;
   const [label, setLabel]       = useState(initialData?.label      ?? '');
   const [year, setYear]         = useState(initialData?.year       ?? midYear);
   const [layer, setLayer]       = useState(initialData?.layer      ?? 0);
@@ -379,17 +381,37 @@ const EventModal = ({
   const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#3E3B35');
   const [style, setStyle]       = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
 
+  const statesInLayer = (l: number) =>
+    events.map((ev, idx) => ({ ev, idx })).filter(({ ev }) => (ev.type ?? 'state') === 'state' && ev.layer === l);
+
+  const [linkedStateIdx, setLinkedStateIdx] = useState<number | null>(() => {
+    if (eventType !== 'anchor' || !isNew) return null;
+    return statesInLayer(initialData?.layer ?? 0)[0]?.idx ?? null;
+  });
+
+  const handleLayerChange = (newLayer: number) => {
+    setLayer(newLayer);
+    if (eventType === 'anchor' && isNew) {
+      setLinkedStateIdx(statesInLayer(newLayer)[0]?.idx ?? null);
+    }
+  };
+
   const handleSave = () => {
     if (!label.trim()) return;
     const x = yearToPct(year);
     const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
-    onSave({ label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width });
+    onSave(
+      { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width },
+      eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
+    );
   };
 
   const isState = eventType === 'state';
   const title = initialData?.label
     ? (isState ? 'Edit State' : 'Edit Anchor')
     : (isState ? 'Add State'  : 'Add Anchor');
+
+  const layerStates = statesInLayer(layer);
 
   return (
     <Modal onClose={onClose} title={title} accentColor="var(--btn-event)">
@@ -406,11 +428,23 @@ const EventModal = ({
         </div>
         <div className="u-form-group">
           <label className="u-form-label">Layer</label>
-          <select className="u-form-select" value={layer} onChange={e => setLayer(Number(e.target.value))}>
+          <select className="u-form-select" value={layer} onChange={e => handleLayerChange(Number(e.target.value))}>
             {layers.map((l, i) => <option key={i} value={i}>{l}</option>)}
           </select>
         </div>
       </div>
+      {!isState && isNew && layerStates.length > 0 && (
+        <div className="u-form-group">
+          <label className="u-form-label">Link to State</label>
+          <select className="u-form-select" value={linkedStateIdx ?? 'none'}
+            onChange={e => setLinkedStateIdx(e.target.value === 'none' ? null : Number(e.target.value))}>
+            <option value="none">None</option>
+            {layerStates.map(({ ev, idx }) => (
+              <option key={idx} value={idx}>{ev.label || `State ${idx + 1}`}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="u-form-row">
         <div className="u-form-group">
           <label className="u-form-label">{isState ? 'Background' : 'Color'}</label>
@@ -996,13 +1030,15 @@ const ComplexityTimeline = () => {
   }, [resizingLayer]);
 
   // ── Event ops ──
-  const addEvent = (data: TimelineEvent) => {
+  const addEvent = (data: TimelineEvent, linkedStateIdx?: number) => {
     if (editingEvent !== null) {
       setEvents(ev => ev.map((e, i) => i === editingEvent ? data : e));
       setEditingEvent(null);
     } else {
       if ((data.type ?? 'state') === 'anchor' && timelineRef.current) {
-        const stateIdx = events.findIndex(ev => (ev.type ?? 'state') === 'state' && ev.layer === data.layer);
+        const stateIdx = linkedStateIdx !== undefined
+          ? linkedStateIdx
+          : events.findIndex(ev => (ev.type ?? 'state') === 'state' && ev.layer === data.layer);
         if (stateIdx >= 0) {
           const stateEv     = events[stateIdx];
           const stateCardEl = cardRefs.current[stateIdx];
@@ -1243,9 +1279,11 @@ const ComplexityTimeline = () => {
     if ((ev.type ?? 'state') === 'anchor') {
       const dotTop     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
       const anchorEl   = cardRefs.current[i];
-      // evX is the container center; the dot (10px) is the first child in a
-      // flex-row, so its center is containerLeft + 5 = evX - halfW + 5.
-      const dotCenterX = anchorEl ? evX - anchorEl.offsetWidth / 2 + 5 : evX;
+      // Use getBoundingClientRect for the rendered left edge of the anchor
+      // container; the dot (10px wide) is the first child, so its center is +5.
+      const dotCenterX = anchorEl
+        ? anchorEl.getBoundingClientRect().left - rect.left + 5
+        : evX;
       return { x: dotCenterX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: 6 };
     }
     const cardEl  = cardRefs.current[i];
@@ -2133,6 +2171,7 @@ const ComplexityTimeline = () => {
           startYear={startYear}
           endYear={endYear}
           yearToPct={yearToPct}
+          events={events}
           initialData={editingEvent !== null ? events[editingEvent] : (typeof showEventModal === 'object' ? showEventModal : undefined)}
         />
       )}
