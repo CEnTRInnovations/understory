@@ -800,12 +800,16 @@ const ComplexityTimeline = () => {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showCutModal, setShowCutModal]           = useState(false);
 
-  const timelineRef   = useRef<HTMLDivElement>(null);
-  const svgRef        = useRef<SVGSVGElement>(null);
-  const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const timelineRef      = useRef<HTMLDivElement>(null);
+  const svgRef           = useRef<SVGSVGElement>(null);
+  const canvasAreaRef    = useRef<HTMLDivElement>(null);
   // Real rendered card elements, so connector anchors can hug the actual
   // (auto-sized) card edge instead of a fixed-size guess.
-  const cardRefs    = useRef<(HTMLDivElement | null)[]>([]);
+  const cardRefs         = useRef<(HTMLDivElement | null)[]>([]);
+  // Ref so the scale-sync effect always sees latest connections without
+  // re-running when connections change (which would reset resized positions).
+  const connectionsRef   = useRef(connections);
+  connectionsRef.current = connections;
 
   const trendRegisterH = Math.max(TREND_REGISTER_H, trends.length * TREND_SLOT_H + 4);
   // Expand column header area when any column carries extra text content.
@@ -856,6 +860,9 @@ const ComplexityTimeline = () => {
 
   // Keep cached event.x positions correct when the scale (start/end year or
   // cuts) changes after events have already been placed.
+  // NOTE: connections is intentionally read via ref so this effect only fires
+  // on scale changes — not when a new anchor/connection is added, which would
+  // reset state positions that the user moved via drag or resize.
   useEffect(() => {
     setEvents(prevEvents => {
       // Pass 1: update state x from year
@@ -867,9 +874,10 @@ const ComplexityTimeline = () => {
         return { ...e, x: newX };
       });
       // Pass 2: update anchor x from parent state + stored offset
-      return syncAnchorPositions(withStates, connections, stateXValues);
+      return syncAnchorPositions(withStates, connectionsRef.current, stateXValues);
     });
-  }, [displayStartYear, endYear, cuts, connections]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayStartYear, endYear, cuts]);
 
   // ── Warn before leaving the page ──
   // A trackpad swipe that overshoots while scrolling the timeline can be
@@ -2218,9 +2226,10 @@ const ComplexityTimeline = () => {
                                 const newCenter = side === 'right'
                                   ? fixedEdgePx + newW / 2
                                   : fixedEdgePx - newW / 2;
-                                if (cardEl)  cardEl.style.width  = `${newW}px`;
-                                // Move outer div so the fixed edge stays put during preview
-                                if (outerEl) outerEl.style.left  = `${newCenter}px`;
+                                // Set width on outerEl (not cardEl) — translateX(-50%) uses
+                                // the outer element's own width for the shift, so updating
+                                // the outer width is what keeps the fixed edge truly fixed.
+                                if (outerEl) { outerEl.style.width = `${newW}px`; outerEl.style.left = `${newCenter}px`; }
                               };
                               const onUp = (ue: PointerEvent) => {
                                 const delta = ue.clientX - startClientX;
@@ -2240,8 +2249,7 @@ const ComplexityTimeline = () => {
                                   if (linkedAnchorIndices.includes(idx)) return { ...ev, xOffsetPct: ev.x - newX };
                                   return ev;
                                 }));
-                                if (cardEl)  cardEl.style.width = '';
-                                if (outerEl) outerEl.style.left = '';
+                                if (outerEl) { outerEl.style.width = ''; outerEl.style.left = ''; }
                                 window.removeEventListener('pointermove', onMove);
                                 window.removeEventListener('pointerup', onUp);
                               };
