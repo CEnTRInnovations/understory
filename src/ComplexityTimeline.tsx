@@ -36,6 +36,7 @@ type Connection = {
   // means "auto" — pick whichever side faces the other event, as before.
   fromSide?: Side;
   toSide?: Side;
+  autoLink?: boolean; // state→anchor line drawn as straight vertical at anchor's x
 };
 
 const DEFAULT_ARROW_SIZE = 8;
@@ -70,7 +71,7 @@ const LAYER_HEIGHT_MIN     = 90;
 // dragged anywhere within the band without crossing into the row above/below.
 const EVENT_TOP_MARGIN    = 12;
 const EVENT_BOTTOM_MARGIN = 56;
-const DEFAULT_Y_OFFSET    = 20;
+const DEFAULT_Y_OFFSET    = 10;
 
 // ── Canvas initial width (used as fallback before ResizeObserver fires) ──
 const CANVAS_WIDTH_INIT  = 1600;
@@ -1000,6 +1001,69 @@ const ComplexityTimeline = () => {
       setEvents(ev => ev.map((e, i) => i === editingEvent ? data : e));
       setEditingEvent(null);
     } else {
+      if ((data.type ?? 'state') === 'anchor' && timelineRef.current) {
+        const stateIdx = events.findIndex(ev => (ev.type ?? 'state') === 'state' && ev.layer === data.layer);
+        if (stateIdx >= 0) {
+          const stateEv     = events[stateIdx];
+          const stateCardEl = cardRefs.current[stateIdx];
+          const stateH      = stateCardEl?.offsetHeight ?? 36;
+          const stateW      = stateEv.width ?? stateCardEl?.offsetWidth ?? 130;
+          const rect        = timelineRef.current.getBoundingClientRect();
+          const w           = rect.width;
+
+          const stateCenterX  = eventLeftPx(stateEv.x, w);
+          const stateLeftEdge  = stateCenterX - stateW / 2;
+          const stateRightEdge = stateCenterX + stateW / 2;
+
+          const layerAnchors = events
+            .map((ev, idx) => ({ ev, idx }))
+            .filter(({ ev }) => (ev.type ?? 'state') === 'anchor' && ev.layer === data.layer);
+          const n = layerAnchors.length;
+
+          const anchorYOffset = clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
+          const pxToPercent   = (px: number) =>
+            ((px - EVENT_EDGE_PADDING) / (w - EVENT_EDGE_PADDING * 2)) * 100;
+
+          let newAnchorX: number;
+          let redistributeMap: Map<number, number> | null = null;
+
+          if (n === 0) {
+            newAnchorX = pxToPercent(stateLeftEdge + 10);
+          } else if (n === 1) {
+            newAnchorX = pxToPercent(stateRightEdge - 80);
+          } else {
+            const totalAnchors  = n + 1;
+            const sortedAnchors = [...layerAnchors].sort((a, b) => a.ev.x - b.ev.x);
+            redistributeMap = new Map(
+              sortedAnchors.map(({ idx }, k) => [
+                idx,
+                pxToPercent(stateLeftEdge + stateW * (2 * k + 1) / (2 * totalAnchors)),
+              ])
+            );
+            newAnchorX = pxToPercent(stateLeftEdge + stateW * (2 * n + 1) / (2 * totalAnchors));
+          }
+
+          const anchorData    = { ...data, x: newAnchorX, yOffset: anchorYOffset };
+          const newAnchorIdx  = events.length;
+
+          if (redistributeMap) {
+            const rmap = redistributeMap;
+            setEvents(ev => [...ev.map((e, i) => rmap.has(i) ? { ...e, x: rmap.get(i)! } : e), anchorData]);
+          } else {
+            setEvents(ev => [...ev, anchorData]);
+          }
+
+          setConnections(conn => [...conn, {
+            from: stateIdx, to: newAnchorIdx,
+            color: '#3E3B35', lineStyle: 'solid' as const, width: 1.5,
+            showArrow: false, autoLink: true,
+          }]);
+
+          setShowEventModal(false);
+          setSelectedEvent(null);
+          return;
+        }
+      }
       setEvents(ev => [...ev, data]);
     }
     setShowEventModal(false);
@@ -1278,6 +1342,24 @@ const ComplexityTimeline = () => {
       const conn = connections[ci];
       const from = getEventPos(conn.from);
       const to   = getEventPos(conn.to);
+
+      if (conn.autoLink) {
+        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.top;
+        ctx.save();
+        ctx.strokeStyle = BG_COLOR;
+        ctx.lineWidth = (conn.width ?? 2) + 6;
+        ctx.setLineDash([]); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(ax, ay1); ctx.lineTo(ax, ay2); ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.strokeStyle = conn.color;
+        ctx.lineWidth = conn.width ?? 2;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(ax, ay1); ctx.lineTo(ax, ay2); ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
       const dash = conn.lineStyle === 'dashed' ? [6, 4] : conn.lineStyle === 'dotted' ? [2, 4] : [];
       ctx.save();
@@ -1709,6 +1791,10 @@ const ComplexityTimeline = () => {
                     const from = getEventPos(conn.from);
                     const to   = getEventPos(conn.to);
                     const { path } = (() => {
+                      if (conn.autoLink) {
+                        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.top;
+                        return { path: `M ${ax} ${ay1} L ${ax} ${ay2}` };
+                      }
                       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
                       return { path: `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}` };
                     })();
