@@ -20,7 +20,8 @@ type TimelineEvent = {
   borderColor: string;
   style: 'normal' | 'italic';
   type: 'state' | 'anchor';
-  width?: number; // states only; px; undefined = auto-size to content
+  width?: number;    // states only; px; undefined = auto-size to content
+  endYear?: number;  // states only; when set alongside year (startYear), defines the span
   xOffsetPct?: number; // anchors only: signed offset from parent state's x (% units)
 };
 
@@ -388,12 +389,15 @@ const EventModal = ({
   const midYear = Math.round((startYear + endYear) / 2);
   const eventType = initialData?.type ?? 'state';
   const isNew = !initialData?.label;
-  const [label, setLabel]       = useState(initialData?.label      ?? '');
-  const [year, setYear]         = useState(initialData?.year       ?? midYear);
-  const [layer, setLayer]       = useState(initialData?.layer      ?? 0);
-  const [color, setColor]       = useState(initialData?.color      ?? (eventType === 'anchor' ? '#3E3B35' : BG_COLOR));
-  const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#3E3B35');
-  const [style, setStyle]       = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
+  const [label, setLabel]         = useState(initialData?.label       ?? '');
+  const [year, setYear]           = useState(initialData?.year        ?? midYear);
+  const [eventEndYear, setEventEndYear] = useState<string>(
+    initialData?.endYear !== undefined ? String(initialData.endYear) : ''
+  );
+  const [layer, setLayer]         = useState(initialData?.layer       ?? 0);
+  const [color, setColor]         = useState(initialData?.color       ?? (eventType === 'anchor' ? '#3E3B35' : BG_COLOR));
+  const [borderColor, setBorder]  = useState(initialData?.borderColor ?? '#3E3B35');
+  const [style, setStyle]         = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
 
   const statesInLayer = (l: number) =>
     events.map((ev, idx) => ({ ev, idx })).filter(({ ev }) => (ev.type ?? 'state') === 'state' && ev.layer === l);
@@ -412,10 +416,18 @@ const EventModal = ({
 
   const handleSave = () => {
     if (!label.trim()) return;
-    const x = yearToPct(year);
+    const parsedEndYear = eventType === 'state' && eventEndYear.trim() !== ''
+      ? Number(eventEndYear)
+      : undefined;
+    // x = midpoint if both years given; addEvent will compute pixel width
+    const x = (parsedEndYear !== undefined && parsedEndYear > year)
+      ? yearToPct((year + parsedEndYear) / 2)
+      : yearToPct(year);
     const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
+    // Preserve an existing resize-width only when no endYear is active
+    const width = parsedEndYear !== undefined ? undefined : initialData?.width;
     onSave(
-      { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width, xOffsetPct: initialData?.xOffsetPct },
+      { label: label.trim(), year, endYear: parsedEndYear, layer, x, yOffset, color, borderColor, style, type: eventType, width, xOffsetPct: initialData?.xOffsetPct },
       eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
     );
   };
@@ -436,17 +448,36 @@ const EventModal = ({
       </div>
       <div className="u-form-row">
         <div className="u-form-group">
-          <label className="u-form-label">Year</label>
+          <label className="u-form-label">{isState ? 'Start Year' : 'Year'}</label>
           <input className="u-form-input" type="number" value={year} min={startYear} max={endYear}
             onChange={e => setYear(Number(e.target.value))} />
         </div>
-        <div className="u-form-group">
-          <label className="u-form-label">Layer</label>
-          <select className="u-form-select" value={layer} onChange={e => handleLayerChange(Number(e.target.value))}>
-            {layers.map((l, i) => <option key={i} value={i}>{l}</option>)}
-          </select>
-        </div>
+        {isState ? (
+          <div className="u-form-group">
+            <label className="u-form-label">End Year <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
+            <input className="u-form-input" type="number" placeholder="—"
+              value={eventEndYear} min={year + 1} max={endYear}
+              onChange={e => setEventEndYear(e.target.value)} />
+          </div>
+        ) : (
+          <div className="u-form-group">
+            <label className="u-form-label">Layer</label>
+            <select className="u-form-select" value={layer} onChange={e => handleLayerChange(Number(e.target.value))}>
+              {layers.map((l, i) => <option key={i} value={i}>{l}</option>)}
+            </select>
+          </div>
+        )}
       </div>
+      {isState && (
+        <div className="u-form-row">
+          <div className="u-form-group">
+            <label className="u-form-label">Layer</label>
+            <select className="u-form-select" value={layer} onChange={e => handleLayerChange(Number(e.target.value))}>
+              {layers.map((l, i) => <option key={i} value={i}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
       {!isState && isNew && layerStates.length > 0 && (
         <div className="u-form-group">
           <label className="u-form-label">Link to State</label>
@@ -869,7 +900,10 @@ const ComplexityTimeline = () => {
       const stateXValues = new Map<number, number>();
       const withStates = prevEvents.map((e, i) => {
         if ((e.type ?? 'state') !== 'state') return e;
-        const newX = yearToXWithCuts(e.year, displayStartYear, endYear, cuts);
+        const centerYear = (e.endYear !== undefined && e.endYear > e.year)
+          ? (e.year + e.endYear) / 2
+          : e.year;
+        const newX = yearToXWithCuts(centerYear, displayStartYear, endYear, cuts);
         stateXValues.set(i, newX);
         return { ...e, x: newX };
       });
@@ -1085,9 +1119,19 @@ const ComplexityTimeline = () => {
   }, [resizingLayer]);
 
   // ── Event ops ──
+  // Resolve pixel width for a state from its year span (requires container width).
+  const resolveStateWidth = (data: TimelineEvent): TimelineEvent => {
+    if ((data.type ?? 'state') !== 'state' || data.endYear === undefined || !timelineRef.current) return data;
+    const containerW = timelineRef.current.getBoundingClientRect().width;
+    const startX = yearToPct(data.year);
+    const endX   = yearToPct(data.endYear);
+    const width  = Math.max(80, eventLeftPx(endX, containerW) - eventLeftPx(startX, containerW));
+    return { ...data, width, x: (startX + endX) / 2 };
+  };
+
   const addEvent = (data: TimelineEvent, linkedStateIdx?: number) => {
     if (editingEvent !== null) {
-      setEvents(ev => ev.map((e, i) => i === editingEvent ? data : e));
+      setEvents(ev => ev.map((e, i) => i === editingEvent ? resolveStateWidth(data) : e));
       setEditingEvent(null);
     } else {
       if ((data.type ?? 'state') === 'anchor' && timelineRef.current) {
@@ -1129,7 +1173,7 @@ const ComplexityTimeline = () => {
           return;
         }
       }
-      setEvents(ev => [...ev, data]);
+      setEvents(ev => [...ev, resolveStateWidth(data)]);
     }
     setShowEventModal(false);
     setSelectedEvent(null);
@@ -2240,11 +2284,21 @@ const ComplexityTimeline = () => {
                                   ? fixedEdgePx + newW / 2
                                   : fixedEdgePx - newW / 2;
                                 const newX = pxToPct(newCenter);
+                                // Derive start/end years from the new edges so the modal
+                                // reflects the current position when the user edits later.
+                                const newStartX = side === 'right'
+                                  ? pxToPct(fixedEdgePx)
+                                  : pxToPct(fixedEdgePx - newW);
+                                const newEndX = side === 'right'
+                                  ? pxToPct(fixedEdgePx + newW)
+                                  : pxToPct(fixedEdgePx);
+                                const newYear    = Math.round(pctToYear(newStartX));
+                                const newEndYear = Math.round(pctToYear(newEndX));
                                 const linkedAnchorIndices = connections
                                   .filter(c => c.autoLink && c.from === i)
                                   .map(c => c.to);
                                 setEvents(evs => evs.map((ev, idx) => {
-                                  if (idx === i) return { ...ev, width: newW, x: newX };
+                                  if (idx === i) return { ...ev, width: newW, x: newX, year: newYear, endYear: newEndYear };
                                   // Anchors keep their absolute x; update xOffsetPct so drags still work
                                   if (linkedAnchorIndices.includes(idx)) return { ...ev, xOffsetPct: ev.x - newX };
                                   return ev;
