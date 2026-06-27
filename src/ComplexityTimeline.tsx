@@ -1336,27 +1336,55 @@ const ComplexityTimeline = () => {
     ctx.beginPath(); ctx.moveTo(0, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
     ctx.restore();
 
-    // Events (cards)
+    // Events (cards and anchors)
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
       const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
-      const cardEl = cardRefs.current[evi];
-      const padding = 6; const lineHeight = 13;
-      const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
-      ctx.font = fontSpec;
-      const bw = cardEl ? cardEl.offsetWidth : 110;
-      const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
-      const contentHeight = lines.length * lineHeight + padding * 2;
-      const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
-      const centerY = y + bh / 2;
-      const boxTop  = centerY - bh / 2;
-      ctx.fillStyle = ev.color; ctx.strokeStyle = ev.borderColor; ctx.lineWidth = 2;
-      ctx.fillRect(x - bw / 2, boxTop, bw, bh); ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
-      ctx.fillStyle = '#3E3B35'; ctx.font = fontSpec;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
-      lines.forEach((line, li) => ctx.fillText(line, x, textStartY + li * lineHeight));
-      ctx.textBaseline = 'alphabetic';
+
+      if ((ev.type ?? 'state') === 'anchor') {
+        // Dot
+        ctx.save();
+        ctx.fillStyle = ev.color;
+        ctx.beginPath();
+        ctx.arc(x, y + 6, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        // Year
+        ctx.save();
+        ctx.fillStyle = ev.color;
+        ctx.font = scaledFont(9, fontScale, '700', false);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(String(ev.year), x, y + 14);
+        ctx.restore();
+        // Label
+        ctx.save();
+        ctx.fillStyle = ev.color;
+        ctx.font = scaledFont(9, fontScale, undefined, ev.style === 'italic');
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const anchorLines = wrapCanvasText(ctx, ev.label, 120);
+        anchorLines.forEach((line, li) => ctx.fillText(line, x, y + 26 + li * 12));
+        ctx.restore();
+      } else {
+        const cardEl = cardRefs.current[evi];
+        const padding = 6; const lineHeight = 13;
+        const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
+        ctx.font = fontSpec;
+        const bw = cardEl ? cardEl.offsetWidth : 110;
+        const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
+        const contentHeight = lines.length * lineHeight + padding * 2;
+        const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
+        const centerY = y + bh / 2;
+        const boxTop  = centerY - bh / 2;
+        ctx.fillStyle = ev.color; ctx.strokeStyle = ev.borderColor; ctx.lineWidth = 2;
+        ctx.fillRect(x - bw / 2, boxTop, bw, bh); ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
+        ctx.fillStyle = '#3E3B35'; ctx.font = fontSpec;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((line, li) => ctx.fillText(line, x, textStartY + li * lineHeight));
+        ctx.textBaseline = 'alphabetic';
+      }
     });
 
     // Year axis
