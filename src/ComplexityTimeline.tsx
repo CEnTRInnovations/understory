@@ -19,9 +19,7 @@ type TimelineEvent = {
   borderColor: string;
   style: 'normal' | 'italic';
   type: 'state' | 'anchor';
-  width?: number;        // states only; px; undefined = auto-size to content
-  dateRange?: string;    // states only; free-form, e.g. "1960s–1980s"
-  description?: string;  // states only; brief description text
+  width?: number; // states only; px; undefined = auto-size to content
 };
 
 type Connection = {
@@ -43,7 +41,7 @@ type Connection = {
 
 const DEFAULT_ARROW_SIZE = 8;
 
-type Column = { label: string; startYear: number; endYear: number };
+type Column = { label: string; startYear: number; endYear: number; dateRange?: string; description?: string };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
 
@@ -394,8 +392,6 @@ const EventModal = ({
   const [color, setColor]       = useState(initialData?.color      ?? (eventType === 'anchor' ? '#3E3B35' : BG_COLOR));
   const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#3E3B35');
   const [style, setStyle]       = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
-  const [dateRange, setDateRange] = useState(initialData?.dateRange ?? '');
-  const [description, setDescription] = useState(initialData?.description ?? '');
 
   const statesInLayer = (l: number) =>
     events.map((ev, idx) => ({ ev, idx })).filter(({ ev }) => (ev.type ?? 'state') === 'state' && ev.layer === l);
@@ -416,12 +412,10 @@ const EventModal = ({
     if (!label.trim()) return;
     const x = yearToPct(year);
     const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
-    const base = { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width };
-    const stateExtra = eventType === 'state' ? {
-      dateRange: dateRange.trim() || undefined,
-      description: description.trim() || undefined,
-    } : {};
-    onSave({ ...base, ...stateExtra }, eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined);
+    onSave(
+      { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width },
+      eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
+    );
   };
 
   const isState = eventType === 'state';
@@ -463,20 +457,6 @@ const EventModal = ({
           </select>
         </div>
       )}
-      {isState && (
-        <>
-          <div className="u-form-group">
-            <label className="u-form-label">Date range (optional)</label>
-            <input className="u-form-input" type="text" placeholder="e.g. 1960s–1980s"
-              value={dateRange} onChange={e => setDateRange(e.target.value)} />
-          </div>
-          <div className="u-form-group">
-            <label className="u-form-label">Description (optional)</label>
-            <input className="u-form-input" type="text" placeholder="Brief description"
-              value={description} onChange={e => setDescription(e.target.value)} />
-          </div>
-        </>
-      )}
       <div className="u-form-row">
         <div className="u-form-group">
           <label className="u-form-label">{isState ? 'Background' : 'Color'}</label>
@@ -512,9 +492,11 @@ const ColumnModal = ({
   endYear: number;
   initialData?: Column;
 }) => {
-  const [label, setLabel]       = useState(initialData?.label ?? '');
-  const [colStart, setColStart] = useState(initialData?.startYear ?? startYear);
-  const [colEnd, setColEnd]     = useState(initialData?.endYear ?? endYear);
+  const [label, setLabel]           = useState(initialData?.label ?? '');
+  const [colStart, setColStart]     = useState(initialData?.startYear ?? startYear);
+  const [colEnd, setColEnd]         = useState(initialData?.endYear ?? endYear);
+  const [dateRange, setDateRange]   = useState(initialData?.dateRange ?? '');
+  const [description, setDescription] = useState(initialData?.description ?? '');
   const isEditing = !!initialData;
 
   return (
@@ -534,8 +516,20 @@ const ColumnModal = ({
           <input className="u-form-input" type="number" value={colEnd} onChange={e => setColEnd(Number(e.target.value))} />
         </div>
       </div>
-      <button className="u-btn u-btn--column u-btn--full" onClick={() => label.trim() && onSave({ label: label.trim(), startYear: colStart, endYear: colEnd })}
-        disabled={!label.trim()}>
+      <div className="u-form-group">
+        <label className="u-form-label">Date range (optional)</label>
+        <input className="u-form-input" type="text" placeholder="e.g. 1960s–1980s"
+          value={dateRange} onChange={e => setDateRange(e.target.value)} />
+      </div>
+      <div className="u-form-group">
+        <label className="u-form-label">Description (optional)</label>
+        <input className="u-form-input" type="text" placeholder="Brief description of this period"
+          value={description} onChange={e => setDescription(e.target.value)} />
+      </div>
+      <button className="u-btn u-btn--column u-btn--full" onClick={() => label.trim() && onSave({
+        label: label.trim(), startYear: colStart, endYear: colEnd,
+        dateRange: dateRange.trim() || undefined, description: description.trim() || undefined,
+      })} disabled={!label.trim()}>
         {isEditing ? 'Save Column' : 'Add Column'}
       </button>
     </Modal>
@@ -812,7 +806,9 @@ const ComplexityTimeline = () => {
   const cardRefs    = useRef<(HTMLDivElement | null)[]>([]);
 
   const trendRegisterH = Math.max(TREND_REGISTER_H, trends.length * TREND_SLOT_H + 4);
-  const topReserveH = COLUMN_HEADER_H + trendRegisterH;
+  // Expand column header area when any column carries extra text content.
+  const colHeaderH = columns.some(c => c.dateRange || c.description) ? 68 : COLUMN_HEADER_H;
+  const topReserveH = colHeaderH + trendRegisterH;
 
   const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
   const canvasWidth = containerWidth > 0 ? containerWidth : CANVAS_WIDTH_INIT;
@@ -1487,19 +1483,37 @@ const ComplexityTimeline = () => {
       }
     });
 
-    // Columns
+    // Columns — border lines only, no background fill
     columns.forEach(col => {
       const x = (yearToPct(col.startYear) / 100) * w;
       const cw = (yearToPct(col.endYear) / 100) * w - x;
-      ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
-      ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
-      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, trendRegisterH + 18);
+      ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + cw, 0); ctx.lineTo(x + cw, h); ctx.stroke();
+      // Label + optional date range + description in the column header strip
+      ctx.fillStyle = '#6b6760'; ctx.textAlign = 'center';
+      let ty = trendRegisterH + 13;
+      ctx.font = scaledFont(10, fontScale, '600');
+      ctx.fillText(col.label, x + cw / 2, ty);
+      if (col.dateRange) {
+        ty += 13; ctx.font = scaledFont(9, fontScale);
+        ctx.fillText(col.dateRange, x + cw / 2, ty);
+      }
+      if (col.description) {
+        ty += 12; ctx.font = scaledFont(9, fontScale);
+        const descLines = wrapCanvasText(ctx, col.description, cw - 20);
+        descLines.forEach((line, li) => ctx.fillText(line, x + cw / 2, ty + li * 11));
+      }
     });
 
-    // Layer dividers + labels
+    // Layer dividers + subtle alternating backgrounds + labels
     layers.forEach((lyr, i) => {
       const y = topReserveH + layerTops[i];
+      const lh = effectiveHeights[i];
+      if (i % 2 === 1) {
+        ctx.fillStyle = 'rgba(62,59,53,0.04)';
+        ctx.fillRect(0, y, w, lh);
+      }
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
@@ -1569,31 +1583,20 @@ const ComplexityTimeline = () => {
       } else {
         const cardEl = cardRefs.current[evi];
         const padding = 6; const lineHeight = 13;
-        const titleFont = scaledFont(12, fontScale, undefined, ev.style === 'italic');
-        ctx.font = titleFont;
+        const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
+        ctx.font = fontSpec;
         const bw = cardEl ? cardEl.offsetWidth : 110;
         const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
         const contentHeight = lines.length * lineHeight + padding * 2;
         const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
-        const boxTop = y;
+        const centerY = y + bh / 2;
+        const boxTop  = centerY - bh / 2;
         ctx.fillStyle = ev.color; ctx.strokeStyle = ev.borderColor; ctx.lineWidth = 2;
         ctx.fillRect(x - bw / 2, boxTop, bw, bh); ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
-        ctx.fillStyle = '#3E3B35';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-        let textY = boxTop + padding;
-        ctx.font = titleFont;
-        lines.forEach((line, li) => ctx.fillText(line, x, textY + li * lineHeight));
-        textY += lines.length * lineHeight + 2;
-        if (ev.dateRange) {
-          ctx.font = scaledFont(10, fontScale);
-          ctx.fillText(ev.dateRange, x, textY);
-          textY += 13;
-        }
-        if (ev.description) {
-          ctx.font = scaledFont(10, fontScale, undefined, false);
-          const descLines = wrapCanvasText(ctx, ev.description, bw - padding * 2);
-          descLines.forEach((line, li) => ctx.fillText(line, x, textY + li * 12));
-        }
+        ctx.fillStyle = '#3E3B35'; ctx.font = fontSpec;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((line, li) => ctx.fillText(line, x, textStartY + li * lineHeight));
         ctx.textBaseline = 'alphabetic';
       }
     });
@@ -1955,7 +1958,7 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {/* Column background stripes — full-height, no label */}
+              {/* Column border lines — vertical separators, no fill */}
               {columns.map((col, i) => {
                 const left  = yearToPct(col.startYear);
                 const width = yearToPct(col.endYear) - left;
@@ -1968,10 +1971,14 @@ const ComplexityTimeline = () => {
               {/* Hairline separator between header/trend register and event zone */}
               <div className="u-content-separator" style={{ top: topReserveH }} />
 
-              {/* Layer row divider lines (titles live in the sticky gutter) */}
+              {/* Layer row divider lines with subtle alternating backgrounds */}
               {layers.map((_, i) => (
                 <div key={i} className="u-layer-row"
-                  style={{ top: topReserveH + layerTops[i], height: effectiveHeights[i] }} />
+                  style={{
+                    top: topReserveH + layerTops[i],
+                    height: effectiveHeights[i],
+                    background: i % 2 === 1 ? 'rgba(62,59,53,0.04)' : 'transparent',
+                  }} />
               ))}
 
               {/* Year axis */}
@@ -2044,17 +2051,19 @@ const ComplexityTimeline = () => {
 
               {/* Column label row — pinned below the trend register */}
               {columns.length > 0 && (
-                <div className="u-col-header-row" style={{ top: trendRegisterH }}>
+                <div className="u-col-header-row" style={{ top: trendRegisterH, height: colHeaderH }}>
                   {columns.map((col, i) => {
                     const left  = yearToPct(col.startYear);
                     const width = yearToPct(col.endYear) - left;
                     return (
                       <div key={i} style={{ position: 'absolute', left: `${left}%`, width: `${width}%` }}>
-                        <div className="u-col-header-label"
+                        <div className={`u-col-header-label${col.dateRange || col.description ? ' u-col-header-label--rich' : ''}`}
                           style={{ left: '50%' }}
                           onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
                           onDoubleClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
-                          {col.label}
+                          <div className="u-col-header-label__title">{col.label}</div>
+                          {col.dateRange && <div className="u-col-header-label__date-range">{col.dateRange}</div>}
+                          {col.description && <div className="u-col-header-label__description">{col.description}</div>}
                         </div>
                         {selectedColumn === i && (
                           <div className="u-col-actions" style={{ top: '100%', left: '50%' }}>
@@ -2115,9 +2124,7 @@ const ComplexityTimeline = () => {
                         className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
                         style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
                       >
-                        <div className="u-event-card__title">{event.label}</div>
-                        {event.dateRange && <div className="u-event-card__date-range">{event.dateRange}</div>}
-                        {event.description && <div className="u-event-card__description">{event.description}</div>}
+                        {event.label}
                         <div
                           className="u-event-resize-handle"
                           onPointerDown={e => {
