@@ -370,6 +370,7 @@ const EventModal = ({
   initialData?: Partial<TimelineEvent>;
 }) => {
   const midYear = Math.round((startYear + endYear) / 2);
+  const eventType = initialData?.type ?? 'state';
   const [label, setLabel]       = useState(initialData?.label      ?? '');
   const [year, setYear]         = useState(initialData?.year       ?? midYear);
   const [layer, setLayer]       = useState(initialData?.layer      ?? 0);
@@ -380,15 +381,20 @@ const EventModal = ({
   const handleSave = () => {
     if (!label.trim()) return;
     const x = yearToPct(year);
-    const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
-    onSave({ label: label.trim(), year, layer, x, yOffset, color, borderColor, style });
+    const yOffset = initialData?.yOffset ?? (eventType === 'state' ? 0 : DEFAULT_Y_OFFSET);
+    onSave({ label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width });
   };
 
+  const isState = eventType === 'state';
+  const title = initialData?.label
+    ? (isState ? 'Edit State' : 'Edit Anchor')
+    : (isState ? 'Add State'  : 'Add Anchor');
+
   return (
-    <Modal onClose={onClose} title={initialData?.label ? 'Edit Event' : 'Add Event'} accentColor="var(--btn-event)">
+    <Modal onClose={onClose} title={title} accentColor="var(--btn-event)">
       <div className="u-form-group">
         <label className="u-form-label">Label</label>
-        <input className="u-form-input" type="text" placeholder="Event description" value={label}
+        <input className="u-form-input" type="text" placeholder={isState ? 'State description' : 'Anchor description'} value={label}
           onChange={e => setLabel(e.target.value)} autoFocus />
       </div>
       <div className="u-form-row">
@@ -406,13 +412,15 @@ const EventModal = ({
       </div>
       <div className="u-form-row">
         <div className="u-form-group">
-          <label className="u-form-label">Background</label>
+          <label className="u-form-label">{isState ? 'Background' : 'Color'}</label>
           <input className="u-form-color" type="color" value={color} onChange={e => setColor(e.target.value)} />
         </div>
-        <div className="u-form-group">
-          <label className="u-form-label">Border</label>
-          <input className="u-form-color" type="color" value={borderColor} onChange={e => setBorder(e.target.value)} />
-        </div>
+        {isState && (
+          <div className="u-form-group">
+            <label className="u-form-label">Border</label>
+            <input className="u-form-color" type="color" value={borderColor} onChange={e => setBorder(e.target.value)} />
+          </div>
+        )}
       </div>
       <div className="u-form-group">
         <label className="u-form-label">Style</label>
@@ -422,7 +430,7 @@ const EventModal = ({
         </select>
       </div>
       <button className="u-btn u-btn--event u-btn--full" onClick={handleSave} disabled={!label.trim()}>
-        {initialData?.label ? 'Update Event' : 'Add Event'}
+        {title}
       </button>
     </Modal>
   );
@@ -1479,8 +1487,11 @@ const ComplexityTimeline = () => {
         <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
           <Layers size={13} /> Add Layer
         </button>
-        <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal(true); }}>
-          <Plus size={13} /> Add Event
+        <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state', yOffset: 0 }); }}>
+          <Plus size={13} /> Add State
+        </button>
+        <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'anchor' }); }}>
+          <Plus size={13} /> Add Anchor
         </button>
         <button className="u-btn u-btn--trend" onClick={() => { setEditingTrend(null); setShowTrendModal(true); }}>
           <TrendingUp size={13} /> Add Trend
