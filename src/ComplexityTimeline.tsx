@@ -1222,7 +1222,7 @@ const ComplexityTimeline = () => {
         setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
         setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
         setEvents(Array.isArray(data.events)
-          ? data.events.map((ev: any) => ({ ...ev, type: 'state' as const }))
+          ? data.events.map((ev: any) => ({ ...ev, type: ev.type ?? 'state' }))
           : []);
         setConnections(Array.isArray(data.connections) ? data.connections : []);
         setColumns(Array.isArray(data.columns) ? data.columns : []);
@@ -1901,6 +1901,7 @@ const ComplexityTimeline = () => {
                           onPointerDown={e => {
                             e.stopPropagation();
                             e.preventDefault();
+                            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                             const startX = e.clientX;
                             const startW = event.width ?? (cardRefs.current[i]?.offsetWidth ?? 130);
                             const cardEl = cardRefs.current[i];
