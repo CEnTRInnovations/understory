@@ -1161,13 +1161,18 @@ const ComplexityTimeline = () => {
     const ev   = events[i];
     if (!ev || !timelineRef.current) return { x: 0, y: 0, top: 0, bottom: 0, halfWidth: CONNECTOR_HALF_WIDTH };
     const rect = timelineRef.current.getBoundingClientRect();
+    const evX  = eventLeftPx(ev.x, rect.width);
+    if ((ev.type ?? 'state') === 'anchor') {
+      const dotTop = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+      return { x: evX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: 6 };
+    }
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
     const top     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
     const centerY = top + halfH;
     return {
-      x: eventLeftPx(ev.x, rect.width),
+      x: evX,
       y: centerY,
       top: centerY - halfH,
       bottom: centerY + halfH,
