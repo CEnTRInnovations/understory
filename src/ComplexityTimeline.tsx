@@ -1832,7 +1832,7 @@ const ComplexityTimeline = () => {
           <div className="u-nav-spacer" />
           <a
             className="u-nav-dedication"
-            href="https://www.faculty.umb.edu/peter_taylor/"
+            href="https://www.keefefuneralhome.com/memorials/peter-j-taylor/4005690"
             target="_blank"
             rel="noopener noreferrer"
             title="In memory of Peter Taylor (1953–2019), whose concept of unruly complexity and multi-strand mapping shaped this tool."
@@ -1866,17 +1866,6 @@ const ComplexityTimeline = () => {
           <Scissors size={13} /> Add Cut
         </button>
 
-        <div className="u-toolbar-sep" />
-
-        <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
-          <Download size={13} /> Save
-        </button>
-        <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
-          <Upload size={13} /> Load
-        </button>
-        <button className="u-btn u-btn--export" onClick={() => exportPNG(selectedProfile)} title="Export as PNG image at 300dpi">
-          <Image size={13} /> Export
-        </button>
         <input
           ref={fileInputRef}
           type="file"
@@ -1892,6 +1881,16 @@ const ComplexityTimeline = () => {
         )}
 
         <div className="u-toolbar-right">
+          <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
+            <Upload size={13} /> Load
+          </button>
+          <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
+            <Download size={13} /> Save
+          </button>
+          <button className="u-btn u-btn--export" onClick={() => exportPNG(selectedProfile)} title="Export as PNG image at 300dpi">
+            <Image size={13} /> Export
+          </button>
+          <div className="u-toolbar-sep" />
           <div className="u-width-controls">
             <span className="u-year-label">Size</span>
             <select
