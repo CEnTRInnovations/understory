@@ -1464,10 +1464,24 @@ const ComplexityTimeline = () => {
         setLayerHeights(Array.isArray(data.layerHeights) ? data.layerHeights : []);
         setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
         setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
-        setEvents(Array.isArray(data.events)
+        const rawEvents: TimelineEvent[] = Array.isArray(data.events)
           ? data.events.map((ev: any) => ({ ...ev, type: ev.type ?? 'state' }))
-          : []);
-        setConnections(Array.isArray(data.connections) ? data.connections : []);
+          : [];
+        const rawConnections: Connection[] = Array.isArray(data.connections)
+          ? data.connections
+          : [];
+
+        // Backward compat: compute xOffsetPct for anchors that pre-date this field
+        const eventsWithOffsets = rawEvents.map((ev, i) => {
+          if ((ev.type ?? 'state') !== 'anchor' || typeof ev.xOffsetPct === 'number') return ev;
+          const parentConn = rawConnections.find(c => c.autoLink && c.to === i);
+          if (!parentConn) return { ...ev, xOffsetPct: 0 };
+          const parentX = rawEvents[parentConn.from]?.x ?? 0;
+          return { ...ev, xOffsetPct: ev.x - parentX };
+        });
+
+        setEvents(eventsWithOffsets);
+        setConnections(rawConnections);
         setColumns(Array.isArray(data.columns) ? data.columns : []);
         setTrends(Array.isArray(data.trends) ? data.trends : []);
         setCuts(Array.isArray(data.cuts) ? data.cuts : []);
