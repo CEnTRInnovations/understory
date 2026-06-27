@@ -367,7 +367,7 @@ h1, h2, h3 {
   left: 0; right: 0;
   border-bottom: 1px solid rgba(62,59,53,0.12);
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   padding-top: 0.5rem;
 }
 
@@ -577,6 +577,16 @@ body.u-dragging-layer {
 .u-layer-edit:hover,
 .u-layer-remove:hover { opacity: 1; }
 
+.u-layer-description {
+  margin: 0;
+  padding: 0.2rem 0.85rem 0.45rem 2.1rem;
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 /* ── YEAR AXIS ── */
 .u-year-axis {
   position: absolute;
@@ -713,6 +723,24 @@ body.u-dragging-layer {
   word-break: break-word;
 }
 .u-event-card--italic { font-style: italic; }
+.u-event-card__title {
+  font-weight: 700;
+}
+.u-event-card__date-range {
+  font-size: 0.6rem;
+  margin-top: 0.18rem;
+  font-weight: 400;
+  font-style: normal;
+  opacity: 0.85;
+}
+.u-event-card__description {
+  font-size: 0.6rem;
+  margin-top: 0.18rem;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.35;
+  word-break: break-word;
+}
 .u-event-node--selected .u-event-card {
   outline: 2px solid var(--primary);
   outline-offset: 2px;

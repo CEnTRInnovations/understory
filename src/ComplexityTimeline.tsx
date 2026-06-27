@@ -19,7 +19,9 @@ type TimelineEvent = {
   borderColor: string;
   style: 'normal' | 'italic';
   type: 'state' | 'anchor';
-  width?: number; // states only; px; undefined = auto-size to content
+  width?: number;        // states only; px; undefined = auto-size to content
+  dateRange?: string;    // states only; free-form, e.g. "1960s–1980s"
+  description?: string;  // states only; brief description text
 };
 
 type Connection = {
@@ -333,10 +335,11 @@ const LayerModal = ({
   onClose, onSave, initialData
 }: {
   onClose: () => void;
-  onSave: (name: string) => void;
-  initialData?: string;
+  onSave: (name: string, description: string) => void;
+  initialData?: { name: string; description: string };
 }) => {
-  const [name, setName] = useState(initialData ?? '');
+  const [name, setName] = useState(initialData?.name ?? '');
+  const [description, setDescription] = useState(initialData?.description ?? '');
   const isEditing = initialData !== undefined;
   return (
     <Modal onClose={onClose} title={isEditing ? 'Edit Layer' : 'Add Layer'}>
@@ -348,11 +351,22 @@ const LayerModal = ({
           placeholder="e.g. Policy, Community, Institutional"
           value={name}
           onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave(name.trim()); }}
+          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave(name.trim(), description.trim()); }}
           autoFocus
         />
       </div>
-      <button className="u-btn u-btn--layer u-btn--full" onClick={() => name.trim() && onSave(name.trim())}>
+      <div className="u-form-group">
+        <label className="u-form-label">Description (optional)</label>
+        <input
+          className="u-form-input"
+          type="text"
+          placeholder="Brief description of this layer"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave(name.trim(), description.trim()); }}
+        />
+      </div>
+      <button className="u-btn u-btn--layer u-btn--full" onClick={() => name.trim() && onSave(name.trim(), description.trim())}>
         {isEditing ? 'Save Layer' : 'Add Layer'}
       </button>
     </Modal>
@@ -380,6 +394,8 @@ const EventModal = ({
   const [color, setColor]       = useState(initialData?.color      ?? (eventType === 'anchor' ? '#3E3B35' : BG_COLOR));
   const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#3E3B35');
   const [style, setStyle]       = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
+  const [dateRange, setDateRange] = useState(initialData?.dateRange ?? '');
+  const [description, setDescription] = useState(initialData?.description ?? '');
 
   const statesInLayer = (l: number) =>
     events.map((ev, idx) => ({ ev, idx })).filter(({ ev }) => (ev.type ?? 'state') === 'state' && ev.layer === l);
@@ -400,10 +416,12 @@ const EventModal = ({
     if (!label.trim()) return;
     const x = yearToPct(year);
     const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
-    onSave(
-      { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width },
-      eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
-    );
+    const base = { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width };
+    const stateExtra = eventType === 'state' ? {
+      dateRange: dateRange.trim() || undefined,
+      description: description.trim() || undefined,
+    } : {};
+    onSave({ ...base, ...stateExtra }, eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined);
   };
 
   const isState = eventType === 'state';
@@ -416,8 +434,8 @@ const EventModal = ({
   return (
     <Modal onClose={onClose} title={title} accentColor="var(--btn-event)">
       <div className="u-form-group">
-        <label className="u-form-label">Label</label>
-        <input className="u-form-input" type="text" placeholder={isState ? 'State description' : 'Anchor description'} value={label}
+        <label className="u-form-label">{isState ? 'Title' : 'Label'}</label>
+        <input className="u-form-input" type="text" placeholder={isState ? 'State title' : 'Anchor label'} value={label}
           onChange={e => setLabel(e.target.value)} autoFocus />
       </div>
       <div className="u-form-row">
@@ -444,6 +462,20 @@ const EventModal = ({
             ))}
           </select>
         </div>
+      )}
+      {isState && (
+        <>
+          <div className="u-form-group">
+            <label className="u-form-label">Date range (optional)</label>
+            <input className="u-form-input" type="text" placeholder="e.g. 1960s–1980s"
+              value={dateRange} onChange={e => setDateRange(e.target.value)} />
+          </div>
+          <div className="u-form-group">
+            <label className="u-form-label">Description (optional)</label>
+            <input className="u-form-input" type="text" placeholder="Brief description"
+              value={description} onChange={e => setDescription(e.target.value)} />
+          </div>
+        </>
       )}
       <div className="u-form-row">
         <div className="u-form-group">
@@ -719,8 +751,9 @@ const CutModal = ({
 
 // ── Main Component ──
 const ComplexityTimeline = () => {
-  const [layers, setLayers]           = useState<string[]>([]);
-  const [layerHeights, setLayerHeights] = useState<number[]>([]);
+  const [layers, setLayers]                     = useState<string[]>([]);
+  const [layerDescriptions, setLayerDescriptions] = useState<string[]>([]);
+  const [layerHeights, setLayerHeights]           = useState<number[]>([]);
   const [resizingLayer, setResizingLayer] = useState<number | null>(null);
   const resizeStartRef = useRef<{ clientY: number; heights: number[] } | null>(null);
   const [draggingLayer, setDraggingLayer] = useState<number | null>(null);
@@ -874,12 +907,11 @@ const ComplexityTimeline = () => {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // After containerWidth changes (new elements mounted, cardRefs populated),
-  // re-render once so connector geometry reads the correct ref dimensions.
+  // After containerWidth or event-count changes (new elements mounted, cardRefs
+  // populated), re-render once so connector geometry reads correct ref dimensions.
   const [, forceReflow] = useReducer((x: number) => x + 1, 0);
-  useLayoutEffect(() => {
-    forceReflow();
-  }, [containerWidth]);
+  useLayoutEffect(() => { forceReflow(); }, [containerWidth]);
+  useLayoutEffect(() => { forceReflow(); }, [events.length]);
 
   // ── ResizeObserver: track the canvas area's actual pixel width ──
   useEffect(() => {
@@ -893,13 +925,14 @@ const ComplexityTimeline = () => {
   }, []);
 
   // ── Layer ops ──
-  const saveLayer = (name: string) => {
+  const saveLayer = (name: string, description: string) => {
     if (editingLayer !== null) {
       setLayers(l => l.map((lyr, i) => i === editingLayer ? name : lyr));
-      // layerHeights unchanged — rename only
+      setLayerDescriptions(d => d.map((desc, i) => i === editingLayer ? description : desc));
       setEditingLayer(null);
     } else {
       setLayers(l => [...l, name]);
+      setLayerDescriptions(d => [...d, description]);
       setLayerHeights(h => [...h, uniformLayerH]);
     }
     setShowLayerModal(false);
@@ -919,6 +952,7 @@ const ComplexityTimeline = () => {
       .filter(c => indexMap.has(c.from) && indexMap.has(c.to))
       .map(c => ({ ...c, from: indexMap.get(c.from)!, to: indexMap.get(c.to)! })));
     setLayers(l => l.filter((_, idx) => idx !== i));
+    setLayerDescriptions(d => d.filter((_, idx) => idx !== i));
     setLayerHeights(h => h.filter((_, idx) => idx !== i));
     setSelectedEvent(null);
     setSelectedConnection(null);
@@ -928,10 +962,13 @@ const ComplexityTimeline = () => {
   const reorderLayers = (fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
     const newLayers = [...layers];
+    const newDescs  = [...layerDescriptions];
     const newHeights = [...effectiveHeights];
     const [movedLayer]  = newLayers.splice(fromIdx, 1);
+    const [movedDesc]   = newDescs.splice(fromIdx, 1);
     const [movedHeight] = newHeights.splice(fromIdx, 1);
     newLayers.splice(toIdx, 0, movedLayer);
+    newDescs.splice(toIdx, 0, movedDesc);
     newHeights.splice(toIdx, 0, movedHeight);
     // Update event.layer indices:
     // Events in fromIdx move to toIdx; events between the two shift by ±1
@@ -943,6 +980,7 @@ const ComplexityTimeline = () => {
       return ev;
     }));
     setLayers(newLayers);
+    setLayerDescriptions(newDescs);
     setLayerHeights(newHeights);
   };
 
@@ -1263,7 +1301,25 @@ const ComplexityTimeline = () => {
         yOffset = clampYOffset(lowestBottom + 20, effectiveHeights[layer]);
       }
     }
-    setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
+    // When dragging a state, shift its auto-linked anchors by the same pixel delta.
+    const isMovingState = droppedEv && (droppedEv.type ?? 'state') === 'state';
+    const linkedAnchorIndices = isMovingState
+      ? connections.filter(c => c.autoLink && c.from === draggingEvent).map(c => c.to)
+      : [];
+    if (isMovingState && linkedAnchorIndices.length > 0) {
+      const w = rect.width;
+      const oldStatePx = eventLeftPx(droppedEv.x, w);
+      const newStatePx = eventLeftPx(x, w);
+      const delta = newStatePx - oldStatePx;
+      const pxToPct = (px: number) => ((px - EVENT_EDGE_PADDING) / (w - EVENT_EDGE_PADDING * 2)) * 100;
+      setEvents(ev => ev.map((evt, i) => {
+        if (i === draggingEvent) return { ...evt, x, year, layer, yOffset };
+        if (linkedAnchorIndices.includes(i)) return { ...evt, x: pxToPct(eventLeftPx(evt.x, w) + delta) };
+        return evt;
+      }));
+    } else {
+      setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
+    }
     setDraggingEvent(null);
   };
 
@@ -1308,7 +1364,7 @@ const ComplexityTimeline = () => {
   const exportJSON = () => {
     const data = {
       version: TIMELINE_FILE_VERSION,
-      layers, startYear, endYear,
+      layers, layerDescriptions, startYear, endYear,
       events, connections, columns, trends, cuts,
       selectedProfileId,
       layerHeights,
@@ -1338,6 +1394,9 @@ const ComplexityTimeline = () => {
           return;
         }
         setLayers(data.layers ?? []);
+        setLayerDescriptions(Array.isArray(data.layerDescriptions)
+          ? data.layerDescriptions
+          : (data.layers ?? []).map(() => ''));
         setLayerHeights(Array.isArray(data.layerHeights) ? data.layerHeights : []);
         setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
         setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
@@ -1510,20 +1569,31 @@ const ComplexityTimeline = () => {
       } else {
         const cardEl = cardRefs.current[evi];
         const padding = 6; const lineHeight = 13;
-        const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
-        ctx.font = fontSpec;
+        const titleFont = scaledFont(12, fontScale, undefined, ev.style === 'italic');
+        ctx.font = titleFont;
         const bw = cardEl ? cardEl.offsetWidth : 110;
         const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
         const contentHeight = lines.length * lineHeight + padding * 2;
         const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
-        const centerY = y + bh / 2;
-        const boxTop  = centerY - bh / 2;
+        const boxTop = y;
         ctx.fillStyle = ev.color; ctx.strokeStyle = ev.borderColor; ctx.lineWidth = 2;
         ctx.fillRect(x - bw / 2, boxTop, bw, bh); ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
-        ctx.fillStyle = '#3E3B35'; ctx.font = fontSpec;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
-        lines.forEach((line, li) => ctx.fillText(line, x, textStartY + li * lineHeight));
+        ctx.fillStyle = '#3E3B35';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        let textY = boxTop + padding;
+        ctx.font = titleFont;
+        lines.forEach((line, li) => ctx.fillText(line, x, textY + li * lineHeight));
+        textY += lines.length * lineHeight + 2;
+        if (ev.dateRange) {
+          ctx.font = scaledFont(10, fontScale);
+          ctx.fillText(ev.dateRange, x, textY);
+          textY += 13;
+        }
+        if (ev.description) {
+          ctx.font = scaledFont(10, fontScale, undefined, false);
+          const descLines = wrapCanvasText(ctx, ev.description, bw - padding * 2);
+          descLines.forEach((line, li) => ctx.fillText(line, x, textY + li * 12));
+        }
         ctx.textBaseline = 'alphabetic';
       }
     });
@@ -1771,6 +1841,9 @@ const ComplexityTimeline = () => {
                       <X size={11} />
                     </button>
                   </div>
+                  {(layerDescriptions[i] ?? '') && (
+                    <p className="u-layer-description">{layerDescriptions[i]}</p>
+                  )}
                   {i < layers.length - 1 && (
                     <div
                       className={`u-layer-resize-handle${resizingLayer === i ? ' u-layer-resize-handle--active' : ''}`}
@@ -2042,7 +2115,9 @@ const ComplexityTimeline = () => {
                         className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
                         style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
                       >
-                        {event.label}
+                        <div className="u-event-card__title">{event.label}</div>
+                        {event.dateRange && <div className="u-event-card__date-range">{event.dateRange}</div>}
+                        {event.description && <div className="u-event-card__description">{event.description}</div>}
                         <div
                           className="u-event-resize-handle"
                           onPointerDown={e => {
@@ -2160,7 +2235,9 @@ const ComplexityTimeline = () => {
         <LayerModal
           onClose={() => { setShowLayerModal(false); setEditingLayer(null); }}
           onSave={saveLayer}
-          initialData={editingLayer !== null ? layers[editingLayer] : undefined}
+          initialData={editingLayer !== null
+            ? { name: layers[editingLayer], description: layerDescriptions[editingLayer] ?? '' }
+            : undefined}
         />
       )}
       {showEventModal && (
