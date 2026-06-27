@@ -1103,7 +1103,9 @@ const ComplexityTimeline = () => {
             .filter(({ ev }) => (ev.type ?? 'state') === 'anchor' && ev.layer === data.layer);
           const n = layerAnchors.length;
 
-          const anchorYOffset = clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
+          const anchorYOffset = n > 0
+            ? layerAnchors[0].ev.yOffset
+            : clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
           const pxToPercent   = (px: number) =>
             ((px - EVENT_EDGE_PADDING) / (w - EVENT_EDGE_PADDING * 2)) * 100;
 
@@ -1343,46 +1345,50 @@ const ComplexityTimeline = () => {
     if (!droppedEv) return;
     const isState   = (droppedEv.type ?? 'state') === 'state';
 
-    if (isState) {
-      // yOffset is always auto-managed for states (locked vertically within a layer).
-      // Drop y only determines which layer band; yOffset comes from sibling stacking.
-      const siblings = events
-        .map((ev, idx) => ({ ev, idx }))
-        .filter(({ ev, idx }) => idx !== draggingEvent && (ev.type ?? 'state') === 'state' && ev.layer === layer);
-      const yOffset = siblings.length > 0
-        ? clampYOffset(
-            Math.max(...siblings.map(({ ev, idx }) => {
-              const h = cardRefs.current[idx]?.offsetHeight ?? 36;
-              return ev.yOffset + h;
-            })) + 20,
-            effectiveHeights[layer]
-          )
-        : 0;
+    if (!isState) { setDraggingEvent(null); return; }
 
-      const year = Math.round(pctToYear(x));
-      const linkedAnchorIndices = connections
-        .filter(c => c.autoLink && c.from === draggingEvent)
-        .map(c => c.to);
+    const sameLayer = layer === droppedEv.layer;
 
-      setEvents(ev => ev.map((evt, i) => {
-        if (i === draggingEvent) return { ...evt, x, year, layer, yOffset };
+    // Vertical position: snap back if staying in the same layer; stack below siblings if changing layers.
+    const yOffset = sameLayer
+      ? droppedEv.yOffset
+      : (() => {
+          const siblings = events
+            .map((ev, idx) => ({ ev, idx }))
+            .filter(({ ev, idx }) => idx !== draggingEvent && (ev.type ?? 'state') === 'state' && ev.layer === layer);
+          return siblings.length > 0
+            ? clampYOffset(
+                Math.max(...siblings.map(({ ev, idx }) => {
+                  const h = cardRefs.current[idx]?.offsetHeight ?? 36;
+                  return ev.yOffset + h;
+                })) + 20,
+                effectiveHeights[layer]
+              )
+            : 0;
+        })();
+
+    const linkedAnchorIndices = connections
+      .filter(c => c.autoLink && c.from === draggingEvent)
+      .map(c => c.to);
+
+    setEvents(ev => {
+      const existingLayerAnchorY = !sameLayer
+        ? ev
+            .filter((e, j) => (e.type ?? 'state') === 'anchor' && e.layer === layer && !linkedAnchorIndices.includes(j))
+            .map(e => e.yOffset)[0]
+        : undefined;
+      return ev.map((evt, i) => {
+        if (i === draggingEvent) return { ...evt, x, layer, yOffset };
         if (linkedAnchorIndices.includes(i)) {
-          // Anchors derive position from stored offset; inherit parent's new layer
-          return { ...evt, x: x + (evt.xOffsetPct ?? 0), layer, yOffset: clampYOffset(evt.yOffset, effectiveHeights[layer]) };
+          if (sameLayer) return { ...evt, x: x + (evt.xOffsetPct ?? 0) };
+          const anchorY = existingLayerAnchorY !== undefined
+            ? existingLayerAnchorY
+            : clampYOffset(evt.yOffset, effectiveHeights[layer]);
+          return { ...evt, x: x + (evt.xOffsetPct ?? 0), layer, yOffset: anchorY };
         }
         return evt;
-      }));
-    } else {
-      // Anchor drag: update position and xOffsetPct; year display label is untouched
-      const yOffset    = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
-      const parentConn = connections.find(c => c.autoLink && c.to === draggingEvent);
-      const parentX    = parentConn ? (events[parentConn.from]?.x ?? 0) : 0;
-      setEvents(ev => ev.map((evt, i) =>
-        i === draggingEvent
-          ? { ...evt, x, layer, yOffset, xOffsetPct: x - parentX }
-          : evt
-      ));
-    }
+      });
+    });
 
     setDraggingEvent(null);
   };
@@ -2171,14 +2177,14 @@ const ComplexityTimeline = () => {
                 return (
                   <div
                     key={i}
-                    draggable
+                    draggable={!isAnchor}
                     className={`u-event-node ${isAnchor ? '' : 'u-event-node--state'} ${event.width ? 'u-event-node--wide' : ''} ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
                     style={{
                       left: eventLeft(event.x),
                       top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px`,
                       ...(event.width && !isAnchor ? { width: `${event.width}px`, maxWidth: 'none' } : {}),
                     }}
-                    onDragStart={e => handleDragStart(e, i)}
+                    onDragStart={e => !isAnchor && handleDragStart(e, i)}
                     onClick={e => handleEventClick(e, i)}
                     onDoubleClick={e => {
                       e.stopPropagation();
