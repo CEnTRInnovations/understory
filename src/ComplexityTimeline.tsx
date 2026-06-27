@@ -374,14 +374,14 @@ const EventModal = ({
   const [label, setLabel]       = useState(initialData?.label      ?? '');
   const [year, setYear]         = useState(initialData?.year       ?? midYear);
   const [layer, setLayer]       = useState(initialData?.layer      ?? 0);
-  const [color, setColor]       = useState(initialData?.color      ?? BG_COLOR);
+  const [color, setColor]       = useState(initialData?.color      ?? (eventType === 'anchor' ? '#3E3B35' : BG_COLOR));
   const [borderColor, setBorder]= useState(initialData?.borderColor ?? '#3E3B35');
   const [style, setStyle]       = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
 
   const handleSave = () => {
     if (!label.trim()) return;
     const x = yearToPct(year);
-    const yOffset = initialData?.yOffset ?? (eventType === 'state' ? 0 : DEFAULT_Y_OFFSET);
+    const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
     onSave({ label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width });
   };
 
@@ -1147,8 +1147,22 @@ const ComplexityTimeline = () => {
     const y     = e.clientY - rect.top - topReserveH;
     const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
-    const yOffset = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
+    let yOffset = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
     const year = Math.round(pctToYear(x));
+    // States snap below the lowest existing state in the target layer
+    const droppedEv = events[draggingEvent];
+    if (droppedEv && (droppedEv.type ?? 'state') === 'state') {
+      const siblings = events
+        .map((ev, idx) => ({ ev, idx }))
+        .filter(({ ev, idx }) => idx !== draggingEvent && (ev.type ?? 'state') === 'state' && ev.layer === layer);
+      if (siblings.length > 0) {
+        const lowestBottom = Math.max(...siblings.map(({ ev, idx }) => {
+          const h = cardRefs.current[idx]?.offsetHeight ?? 36;
+          return ev.yOffset + h;
+        }));
+        yOffset = clampYOffset(lowestBottom + 20, effectiveHeights[layer]);
+      }
+    }
     setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
     setDraggingEvent(null);
   };
@@ -1342,29 +1356,32 @@ const ComplexityTimeline = () => {
       const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
 
       if ((ev.type ?? 'state') === 'anchor') {
+        // Dot on the left, year + label stacked to the right
+        const dotR = 5;
+        const textX = x + dotR + 6; // 6px gap between dot right edge and text
         // Dot
         ctx.save();
         ctx.fillStyle = ev.color;
         ctx.beginPath();
-        ctx.arc(x, y + 6, 6, 0, Math.PI * 2);
+        ctx.arc(x, y + dotR + 2, dotR, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
         // Year
         ctx.save();
         ctx.fillStyle = ev.color;
         ctx.font = scaledFont(9, fontScale, '700', false);
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText(String(ev.year), x, y + 14);
+        ctx.fillText(String(ev.year), textX, y);
         ctx.restore();
         // Label
         ctx.save();
         ctx.fillStyle = ev.color;
         ctx.font = scaledFont(9, fontScale, undefined, ev.style === 'italic');
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        const anchorLines = wrapCanvasText(ctx, ev.label, 120);
-        anchorLines.forEach((line, li) => ctx.fillText(line, x, y + 26 + li * 12));
+        const anchorLines = wrapCanvasText(ctx, ev.label, 110);
+        anchorLines.forEach((line, li) => ctx.fillText(line, textX, y + 12 + li * 11));
         ctx.restore();
       } else {
         const cardEl = cardRefs.current[evi];
@@ -1520,7 +1537,7 @@ const ComplexityTimeline = () => {
         <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
           <Layers size={13} /> Add Layer
         </button>
-        <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state', yOffset: 0 }); }}>
+        <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state' }); }}>
           <Plus size={13} /> Add State
         </button>
         <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'anchor' }); }}>
@@ -1884,9 +1901,11 @@ const ComplexityTimeline = () => {
                         className="u-event-anchor"
                       >
                         <div className="u-event-anchor__dot" style={{ background: event.color }} />
-                        <div className="u-event-anchor__year" style={{ color: event.color }}>{event.year}</div>
-                        <div className={`u-event-anchor__label${event.style === 'italic' ? ' u-event-anchor__label--italic' : ''}`} style={{ color: event.color }}>
-                          {event.label}
+                        <div className="u-event-anchor__text">
+                          <div className="u-event-anchor__year" style={{ color: event.color }}>{event.year}</div>
+                          <div className={`u-event-anchor__label${event.style === 'italic' ? ' u-event-anchor__label--italic' : ''}`} style={{ color: event.color }}>
+                            {event.label}
+                          </div>
                         </div>
                       </div>
                     ) : (

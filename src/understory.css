@@ -777,31 +777,34 @@ body.u-dragging-layer {
 /* Anchor moment rendering */
 .u-event-anchor {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
   cursor: move;
-  min-width: 60px;
-  max-width: 130px;
+  max-width: 160px;
 }
 .u-event-anchor__dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+  margin-top: 2px;
+}
+.u-event-anchor__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .u-event-anchor__year {
   font-family: "Alegreya Sans", sans-serif;
   font-size: 0.6rem;
   font-weight: 700;
   line-height: 1.2;
-  text-align: center;
 }
 .u-event-anchor__label {
   font-family: "Alegreya Sans", sans-serif;
   font-size: 0.6rem;
   line-height: 1.3;
-  text-align: center;
   word-break: break-word;
 }
 .u-event-anchor__label--italic { font-style: italic; }
