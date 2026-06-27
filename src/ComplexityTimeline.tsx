@@ -1154,9 +1154,53 @@ const ComplexityTimeline = () => {
     setSelectedEvent(null);
   };
   const deleteEvent = (i: number) => {
-    setEvents(ev => ev.filter((_, idx) => idx !== i));
-    setConnections(conn => conn.filter(c => c.from !== i && c.to !== i)
-      .map(c => ({ ...c, from: c.from > i ? c.from - 1 : c.from, to: c.to > i ? c.to - 1 : c.to })));
+    const ev      = events[i];
+    const isState = ev && (ev.type ?? 'state') === 'state';
+
+    if (isState) {
+      const anchorIndices = connections
+        .filter(c => c.autoLink && c.from === i)
+        .map(c => c.to);
+
+      if (anchorIndices.length > 0) {
+        const count = anchorIndices.length;
+        const confirmed = window.confirm(
+          `This state has ${count} anchor${count === 1 ? '' : 's'} that will also be deleted. Continue?`
+        );
+        if (!confirmed) return;
+      }
+
+      const toDelete = new Set([i, ...anchorIndices]);
+
+      // Build old-index → new-index map for surviving events
+      const reindex = new Map<number, number>();
+      let shift = 0;
+      for (let j = 0; j < events.length; j++) {
+        if (toDelete.has(j)) { shift++; }
+        else { reindex.set(j, j - shift); }
+      }
+
+      setEvents(prev => prev.filter((_, idx) => !toDelete.has(idx)));
+      setConnections(conn =>
+        conn
+          .filter(c => !toDelete.has(c.from) && !toDelete.has(c.to))
+          .map(c => ({ ...c, from: reindex.get(c.from)!, to: reindex.get(c.to)! }))
+      );
+      setSelectedEvent(null);
+      return;
+    }
+
+    // Anchor or non-state: single delete with sequential reindex
+    setEvents(prev => prev.filter((_, idx) => idx !== i));
+    setConnections(conn =>
+      conn
+        .filter(c => c.from !== i && c.to !== i)
+        .map(c => ({
+          ...c,
+          from: c.from > i ? c.from - 1 : c.from,
+          to:   c.to   > i ? c.to   - 1 : c.to,
+        }))
+    );
     setSelectedEvent(null);
   };
 
