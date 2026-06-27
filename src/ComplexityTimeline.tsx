@@ -1344,7 +1344,7 @@ const ComplexityTimeline = () => {
       const to   = getEventPos(conn.to);
 
       if (conn.autoLink) {
-        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.top;
+        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
         ctx.save();
         ctx.strokeStyle = BG_COLOR;
         ctx.lineWidth = (conn.width ?? 2) + 6;
@@ -1792,7 +1792,7 @@ const ComplexityTimeline = () => {
                     const to   = getEventPos(conn.to);
                     const { path } = (() => {
                       if (conn.autoLink) {
-                        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.top;
+                        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
                         return { path: `M ${ax} ${ay1} L ${ax} ${ay2}` };
                       }
                       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
@@ -2016,7 +2016,29 @@ const ComplexityTimeline = () => {
                             };
                             const onUp = (ue: PointerEvent) => {
                               const newW = Math.max(80, startW + (ue.clientX - startX));
-                              setEvents(evs => evs.map((ev, idx) => idx === i ? { ...ev, width: newW } : ev));
+                              const linkedAnchorIndices = connections
+                                .filter(c => c.autoLink && c.from === i)
+                                .map(c => c.to);
+                              const rect = timelineRef.current?.getBoundingClientRect();
+                              setEvents(evs => {
+                                const stateEv = evs[i];
+                                if (!rect || !stateEv || linkedAnchorIndices.length === 0) {
+                                  return evs.map((ev, idx) => idx === i ? { ...ev, width: newW } : ev);
+                                }
+                                const stateCenterX  = eventLeftPx(stateEv.x, rect.width);
+                                const stateLeftEdge = stateCenterX - newW / 2;
+                                const n             = linkedAnchorIndices.length;
+                                const pxToPct       = (px: number) =>
+                                  ((px - EVENT_EDGE_PADDING) / (rect.width - EVENT_EDGE_PADDING * 2)) * 100;
+                                const sortedIndices = [...linkedAnchorIndices]
+                                  .sort((a, b) => (evs[a]?.x ?? 0) - (evs[b]?.x ?? 0));
+                                return evs.map((ev, idx) => {
+                                  if (idx === i) return { ...ev, width: newW };
+                                  const order = sortedIndices.indexOf(idx);
+                                  if (order >= 0) return { ...ev, x: pxToPct(stateLeftEdge + newW * (2 * order + 1) / (2 * n)) };
+                                  return ev;
+                                });
+                              });
                               window.removeEventListener('pointermove', onMove);
                               window.removeEventListener('pointerup', onUp);
                             };

@@ -797,13 +797,13 @@ body.u-dragging-layer {
 }
 .u-event-anchor__year {
   font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   font-weight: 700;
   line-height: 1.2;
 }
 .u-event-anchor__label {
   font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   line-height: 1.3;
   word-break: break-word;
 }
