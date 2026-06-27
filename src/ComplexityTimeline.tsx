@@ -1337,7 +1337,11 @@ const ComplexityTimeline = () => {
     e.preventDefault();
     if (draggingEvent === null || !timelineRef.current) return;
     const rect  = timelineRef.current.getBoundingClientRect();
-    const x     = ((e.clientX - rect.left) / rect.width) * 100;
+    // Use the same padded coordinate system as eventLeft/pxToPercent so that
+    // anchor xOffsetPct values (which are padded-system deltas) stay consistent.
+    const x     = Math.max(0, Math.min(100,
+      ((e.clientX - rect.left - EVENT_EDGE_PADDING) / (rect.width - 2 * EVENT_EDGE_PADDING)) * 100
+    ));
     const y     = e.clientY - rect.top - topReserveH;
     const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
