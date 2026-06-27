@@ -19,6 +19,8 @@ type TimelineEvent = {
   color: string;
   borderColor: string;
   style: 'normal' | 'italic';
+  type: 'state' | 'anchor';
+  width?: number; // states only; px; undefined = auto-size to content
 };
 
 type Connection = {
@@ -1285,7 +1287,9 @@ const ComplexityTimeline = () => {
         setLayerHeights(Array.isArray(data.layerHeights) ? data.layerHeights : []);
         setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
         setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
-        setEvents(Array.isArray(data.events) ? data.events : []);
+        setEvents(Array.isArray(data.events)
+          ? data.events.map((ev: any) => ({ ...ev, type: 'state' as const }))
+          : []);
         setConnections(Array.isArray(data.connections) ? data.connections : []);
         setColumns(Array.isArray(data.columns) ? data.columns : []);
         setTrends(Array.isArray(data.trends) ? data.trends : []);
