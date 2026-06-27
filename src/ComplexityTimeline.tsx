@@ -1090,13 +1090,6 @@ const ComplexityTimeline = () => {
           const stateEv     = events[stateIdx];
           const stateCardEl = cardRefs.current[stateIdx];
           const stateH      = stateCardEl?.offsetHeight ?? 36;
-          const stateW      = stateEv.width ?? stateCardEl?.offsetWidth ?? 130;
-          const rect        = timelineRef.current.getBoundingClientRect();
-          const w           = rect.width;
-
-          const stateCenterX  = eventLeftPx(stateEv.x, w);
-          const stateLeftEdge  = stateCenterX - stateW / 2;
-          const stateRightEdge = stateCenterX + stateW / 2;
 
           const layerAnchors = events
             .map((ev, idx) => ({ ev, idx }))
@@ -1106,38 +1099,16 @@ const ComplexityTimeline = () => {
           const anchorYOffset = n > 0
             ? layerAnchors[0].ev.yOffset
             : clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
-          const pxToPercent   = (px: number) =>
-            ((px - EVENT_EDGE_PADDING) / (w - EVENT_EDGE_PADDING * 2)) * 100;
 
-          let newAnchorX: number;
-          let redistributeMap: Map<number, { x: number; xOffsetPct: number }> | null = null;
+          // Use the year-based x from the modal (data.x = yearToPct(year)) so the anchor
+          // appears at its year position. xOffsetPct records the signed delta from the parent
+          // state so the anchor travels correctly when the state is dragged.
+          const newAnchorX  = data.x;
+          const xOffsetPct  = newAnchorX - stateEv.x;
+          const anchorData  = { ...data, x: newAnchorX, yOffset: anchorYOffset, xOffsetPct };
+          const newAnchorIdx = events.length;
 
-          if (n === 0) {
-            newAnchorX = pxToPercent(stateLeftEdge + 10);
-          } else if (n === 1) {
-            newAnchorX = pxToPercent(stateRightEdge - 80);
-          } else {
-            const totalAnchors  = n + 1;
-            const sortedAnchors = [...layerAnchors].sort((a, b) => a.ev.x - b.ev.x);
-            redistributeMap = new Map(
-              sortedAnchors.map(({ idx }, k) => {
-                const newX = pxToPercent(stateLeftEdge + stateW * (2 * k + 1) / (2 * totalAnchors));
-                return [idx, { x: newX, xOffsetPct: newX - stateEv.x }];
-              })
-            );
-            newAnchorX = pxToPercent(stateLeftEdge + stateW * (2 * n + 1) / (2 * totalAnchors));
-          }
-
-          const xOffsetPct    = newAnchorX - stateEv.x;
-          const anchorData    = { ...data, x: newAnchorX, yOffset: anchorYOffset, xOffsetPct };
-          const newAnchorIdx  = events.length;
-
-          if (redistributeMap) {
-            const rmap = redistributeMap;
-            setEvents(ev => [...ev.map((e, i) => rmap.has(i) ? { ...e, ...rmap.get(i)! } : e), anchorData]);
-          } else {
-            setEvents(ev => [...ev, anchorData]);
-          }
+          setEvents(ev => [...ev, anchorData]);
 
           setConnections(conn => [...conn, {
             from: stateIdx, to: newAnchorIdx,
@@ -2217,51 +2188,68 @@ const ComplexityTimeline = () => {
                         style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
                       >
                         {event.label}
-                        <div
-                          className="u-event-resize-handle"
-                          onPointerDown={e => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                            const startX = e.clientX;
-                            const startW = event.width ?? (cardRefs.current[i]?.offsetWidth ?? 130);
-                            const cardEl = cardRefs.current[i];
-                            const onMove = (me: PointerEvent) => {
-                              const newW = Math.max(80, startW + (me.clientX - startX));
-                              if (cardEl) cardEl.style.width = `${newW}px`;
-                            };
-                            const onUp = (ue: PointerEvent) => {
-                              const newW = Math.max(80, startW + (ue.clientX - startX));
-                              const linkedAnchorIndices = connections
-                                .filter(c => c.autoLink && c.from === i)
-                                .map(c => c.to);
+                        {(['left', 'right'] as const).map(side => (
+                          <div
+                            key={side}
+                            className={`u-event-resize-handle u-event-resize-handle--${side}`}
+                            onPointerDown={e => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                              const startClientX = e.clientX;
                               const rect = timelineRef.current?.getBoundingClientRect();
-                              setEvents(evs => {
-                                const stateEv = evs[i];
-                                if (!rect || !stateEv || linkedAnchorIndices.length === 0) {
-                                  return evs.map((ev, idx) => idx === i ? { ...ev, width: newW } : ev);
-                                }
-                                const stateCenterX  = eventLeftPx(stateEv.x, rect.width);
-                                const stateLeftEdge = stateCenterX - newW / 2;
-                                const n             = linkedAnchorIndices.length;
-                                const pxToPct       = (px: number) =>
-                                  ((px - EVENT_EDGE_PADDING) / (rect.width - EVENT_EDGE_PADDING * 2)) * 100;
-                                const sortedIndices = [...linkedAnchorIndices]
-                                  .sort((a, b) => (evs[a]?.x ?? 0) - (evs[b]?.x ?? 0));
-                                return evs.map((ev, idx) => {
-                                  if (idx === i) return { ...ev, width: newW };
-                                  const order = sortedIndices.indexOf(idx);
-                                  if (order >= 0) return { ...ev, x: pxToPct(stateLeftEdge + newW * (2 * order + 1) / (2 * n)) };
+                              if (!rect) return;
+                              const containerW = rect.width;
+                              const startW  = event.width ?? (cardRefs.current[i]?.offsetWidth ?? 130);
+                              const cardEl  = cardRefs.current[i];
+                              const outerEl = cardEl?.parentElement as HTMLElement | null;
+                              const pxToPct = (px: number) =>
+                                ((px - EVENT_EDGE_PADDING) / (containerW - 2 * EVENT_EDGE_PADDING)) * 100;
+                              // Fixed edge in container-relative pixels
+                              const centerPx    = eventLeftPx(event.x, containerW);
+                              const fixedEdgePx = side === 'right'
+                                ? centerPx - startW / 2   // left edge stays fixed
+                                : centerPx + startW / 2;  // right edge stays fixed
+                              const onMove = (me: PointerEvent) => {
+                                const delta = me.clientX - startClientX;
+                                const newW  = Math.max(80, side === 'right'
+                                  ? startW + delta
+                                  : startW - delta);
+                                const newCenter = side === 'right'
+                                  ? fixedEdgePx + newW / 2
+                                  : fixedEdgePx - newW / 2;
+                                if (cardEl)  cardEl.style.width  = `${newW}px`;
+                                // Move outer div so the fixed edge stays put during preview
+                                if (outerEl) outerEl.style.left  = `${newCenter}px`;
+                              };
+                              const onUp = (ue: PointerEvent) => {
+                                const delta = ue.clientX - startClientX;
+                                const newW  = Math.max(80, side === 'right'
+                                  ? startW + delta
+                                  : startW - delta);
+                                const newCenter = side === 'right'
+                                  ? fixedEdgePx + newW / 2
+                                  : fixedEdgePx - newW / 2;
+                                const newX = pxToPct(newCenter);
+                                const linkedAnchorIndices = connections
+                                  .filter(c => c.autoLink && c.from === i)
+                                  .map(c => c.to);
+                                setEvents(evs => evs.map((ev, idx) => {
+                                  if (idx === i) return { ...ev, width: newW, x: newX };
+                                  // Anchors keep their absolute x; update xOffsetPct so drags still work
+                                  if (linkedAnchorIndices.includes(idx)) return { ...ev, xOffsetPct: ev.x - newX };
                                   return ev;
-                                });
-                              });
-                              window.removeEventListener('pointermove', onMove);
-                              window.removeEventListener('pointerup', onUp);
-                            };
-                            window.addEventListener('pointermove', onMove);
-                            window.addEventListener('pointerup', onUp);
-                          }}
-                        />
+                                }));
+                                if (cardEl)  cardEl.style.width = '';
+                                if (outerEl) outerEl.style.left = '';
+                                window.removeEventListener('pointermove', onMove);
+                                window.removeEventListener('pointerup', onUp);
+                              };
+                              window.addEventListener('pointermove', onMove);
+                              window.addEventListener('pointerup', onUp);
+                            }}
+                          />
+                        ))}
                       </div>
                     )}
                     {selectedEvent === i && (() => {
