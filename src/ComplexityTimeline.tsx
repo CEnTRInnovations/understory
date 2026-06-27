@@ -1108,7 +1108,7 @@ const ComplexityTimeline = () => {
             ((px - EVENT_EDGE_PADDING) / (w - EVENT_EDGE_PADDING * 2)) * 100;
 
           let newAnchorX: number;
-          let redistributeMap: Map<number, number> | null = null;
+          let redistributeMap: Map<number, { x: number; xOffsetPct: number }> | null = null;
 
           if (n === 0) {
             newAnchorX = pxToPercent(stateLeftEdge + 10);
@@ -1118,20 +1118,21 @@ const ComplexityTimeline = () => {
             const totalAnchors  = n + 1;
             const sortedAnchors = [...layerAnchors].sort((a, b) => a.ev.x - b.ev.x);
             redistributeMap = new Map(
-              sortedAnchors.map(({ idx }, k) => [
-                idx,
-                pxToPercent(stateLeftEdge + stateW * (2 * k + 1) / (2 * totalAnchors)),
-              ])
+              sortedAnchors.map(({ idx }, k) => {
+                const newX = pxToPercent(stateLeftEdge + stateW * (2 * k + 1) / (2 * totalAnchors));
+                return [idx, { x: newX, xOffsetPct: newX - stateEv.x }];
+              })
             );
             newAnchorX = pxToPercent(stateLeftEdge + stateW * (2 * n + 1) / (2 * totalAnchors));
           }
 
-          const anchorData    = { ...data, x: newAnchorX, yOffset: anchorYOffset };
+          const xOffsetPct    = newAnchorX - stateEv.x;
+          const anchorData    = { ...data, x: newAnchorX, yOffset: anchorYOffset, xOffsetPct };
           const newAnchorIdx  = events.length;
 
           if (redistributeMap) {
             const rmap = redistributeMap;
-            setEvents(ev => [...ev.map((e, i) => rmap.has(i) ? { ...e, x: rmap.get(i)! } : e), anchorData]);
+            setEvents(ev => [...ev.map((e, i) => rmap.has(i) ? { ...e, ...rmap.get(i)! } : e), anchorData]);
           } else {
             setEvents(ev => [...ev, anchorData]);
           }
