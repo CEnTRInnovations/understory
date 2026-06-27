@@ -1825,12 +1825,17 @@ const ComplexityTimeline = () => {
 
               {/* Events */}
               {events.map((event, i) => {
+                const isAnchor = (event.type ?? 'state') === 'anchor';
                 return (
                   <div
                     key={i}
                     draggable
-                    className={`u-event-node ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
-                    style={{ left: eventLeft(event.x), top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px` }}
+                    className={`u-event-node ${isAnchor ? '' : 'u-event-node--state'} ${event.width ? 'u-event-node--wide' : ''} ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
+                    style={{
+                      left: eventLeft(event.x),
+                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px`,
+                      ...(event.width && !isAnchor ? { width: `${event.width}px`, maxWidth: 'none' } : {}),
+                    }}
                     onDragStart={e => handleDragStart(e, i)}
                     onClick={e => handleEventClick(e, i)}
                     onDoubleClick={e => {
@@ -1840,13 +1845,26 @@ const ComplexityTimeline = () => {
                       setShowEventModal(event);
                     }}
                   >
-                    <div
-                      ref={el => { cardRefs.current[i] = el; }}
-                      className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
-                      style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
-                    >
-                      {event.label}
-                    </div>
+                    {isAnchor ? (
+                      <div
+                        ref={el => { cardRefs.current[i] = el; }}
+                        className="u-event-anchor"
+                      >
+                        <div className="u-event-anchor__dot" style={{ background: event.color }} />
+                        <div className="u-event-anchor__year" style={{ color: event.color }}>{event.year}</div>
+                        <div className={`u-event-anchor__label${event.style === 'italic' ? ' u-event-anchor__label--italic' : ''}`} style={{ color: event.color }}>
+                          {event.label}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        ref={el => { cardRefs.current[i] = el; }}
+                        className={`u-event-card ${event.style === 'italic' ? 'u-event-card--italic' : ''}`}
+                        style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
+                      >
+                        {event.label}
+                      </div>
+                    )}
                     {selectedEvent === i && (() => {
                       const eventConns = connections.map((c, ci) => ({ c, ci })).filter(({ c }) => c.from === i || c.to === i);
                       return (
