@@ -816,6 +816,31 @@ body.u-dragging-layer {
   border-radius: 2px;
 }
 
+/* State resize handle */
+.u-event-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+.u-event-node:hover .u-event-resize-handle { opacity: 1; }
+.u-event-resize-handle::after {
+  content: '';
+  width: 3px;
+  height: 60%;
+  background: var(--primary);
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
 /* ── EVENT ACTION POPUP ── */
 .u-event-actions {
   position: absolute;

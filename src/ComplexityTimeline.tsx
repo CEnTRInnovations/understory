@@ -1863,6 +1863,28 @@ const ComplexityTimeline = () => {
                         style={{ background: event.color, borderColor: event.borderColor, color: event.borderColor }}
                       >
                         {event.label}
+                        <div
+                          className="u-event-resize-handle"
+                          onPointerDown={e => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const startX = e.clientX;
+                            const startW = event.width ?? (cardRefs.current[i]?.offsetWidth ?? 130);
+                            const cardEl = cardRefs.current[i];
+                            const onMove = (me: PointerEvent) => {
+                              const newW = Math.max(80, startW + (me.clientX - startX));
+                              if (cardEl) cardEl.style.width = `${newW}px`;
+                            };
+                            const onUp = (ue: PointerEvent) => {
+                              const newW = Math.max(80, startW + (ue.clientX - startX));
+                              setEvents(evs => evs.map((ev, idx) => idx === i ? { ...ev, width: newW } : ev));
+                              window.removeEventListener('pointermove', onMove);
+                              window.removeEventListener('pointerup', onUp);
+                            };
+                            window.addEventListener('pointermove', onMove);
+                            window.addEventListener('pointerup', onUp);
+                          }}
+                        />
                       </div>
                     )}
                     {selectedEvent === i && (() => {
