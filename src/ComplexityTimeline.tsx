@@ -415,7 +415,7 @@ const EventModal = ({
     const x = yearToPct(year);
     const yOffset = initialData?.yOffset ?? DEFAULT_Y_OFFSET;
     onSave(
-      { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width },
+      { label: label.trim(), year, layer, x, yOffset, color, borderColor, style, type: eventType, width: initialData?.width, xOffsetPct: initialData?.xOffsetPct },
       eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
     );
   };
@@ -1368,7 +1368,7 @@ const ComplexityTimeline = () => {
         if (i === draggingEvent) return { ...evt, x, year, layer, yOffset };
         if (linkedAnchorIndices.includes(i)) {
           // Anchors derive position from stored offset; inherit parent's new layer
-          return { ...evt, x: x + (evt.xOffsetPct ?? 0), layer };
+          return { ...evt, x: x + (evt.xOffsetPct ?? 0), layer, yOffset: clampYOffset(evt.yOffset, effectiveHeights[layer]) };
         }
         return evt;
       }));
