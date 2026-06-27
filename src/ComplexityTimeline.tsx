@@ -1296,7 +1296,8 @@ const ComplexityTimeline = () => {
     const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
     const droppedEv = events[draggingEvent];
-    const isState   = droppedEv && (droppedEv.type ?? 'state') === 'state';
+    if (!droppedEv) return;
+    const isState   = (droppedEv.type ?? 'state') === 'state';
 
     if (isState) {
       // yOffset is always auto-managed for states (locked vertically within a layer).
