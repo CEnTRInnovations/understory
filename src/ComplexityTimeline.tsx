@@ -1241,8 +1241,12 @@ const ComplexityTimeline = () => {
     const rect = timelineRef.current.getBoundingClientRect();
     const evX  = eventLeftPx(ev.x, rect.width);
     if ((ev.type ?? 'state') === 'anchor') {
-      const dotTop = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
-      return { x: evX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: 6 };
+      const dotTop     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+      const anchorEl   = cardRefs.current[i];
+      // evX is the container center; the dot (10px) is the first child in a
+      // flex-row, so its center is containerLeft + 5 = evX - halfW + 5.
+      const dotCenterX = anchorEl ? evX - anchorEl.offsetWidth / 2 + 5 : evX;
+      return { x: dotCenterX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: 6 };
     }
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
