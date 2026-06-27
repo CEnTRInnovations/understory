@@ -170,21 +170,6 @@ h1, h2, h3 {
 }
 .u-btn--ghost:hover { background: var(--bg-warm); }
 .u-btn--full { width: 100%; justify-content: center; }
-.u-btn--mode {
-  padding: 3px 10px;
-  font-size: 0.72rem;
-  border-radius: 3px;
-  background: transparent;
-  border: 1px solid rgba(62,59,53,0.25);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.u-btn--mode-active {
-  background: rgba(62,59,53,0.12);
-  color: var(--text-primary, #3E3B35);
-  border-color: rgba(62,59,53,0.4);
-}
-
 /* ── TOOLBAR RIGHT GROUP (width + year controls) ── */
 .u-toolbar-right {
   display: flex;
@@ -958,52 +943,3 @@ body.u-dragging-layer {
   accent-color: var(--primary);
 }
 
-/* ── STRANDS MODE ── */
-.u-strand-label {
-  position: absolute;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 11px;
-  font-family: 'Alegreya Sans', sans-serif;
-  color: #3E3B35;
-  cursor: pointer;
-  user-select: none;
-  pointer-events: auto;
-  line-height: 1.2;
-}
-.u-strand-label--selected {
-  outline: 1px dashed rgba(62,59,53,0.4);
-  outline-offset: 2px;
-}
-.u-strand-label--italic {
-  font-style: italic;
-}
-.u-strand-trend-bar {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
-  font-size: 0.65rem;
-  font-weight: 500;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  /* opacity removed — background rgba set via inline style for transparency */
-  cursor: pointer;
-  padding-left: 6px;
-  overflow: hidden;
-  border-radius: 2px;
-}
-.u-strand-trend-bar:hover { filter: brightness(1.1); }
-.u-strand-trend-label {
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 10px;
-  font-family: 'Alegreya Sans', sans-serif;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: calc(100% - 8px);
-}

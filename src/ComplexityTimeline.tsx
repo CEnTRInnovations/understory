@@ -8,7 +8,6 @@ const LOGO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAHgAAAB2CAYAAAADbleiAAAKOmlDQ1BzUkdCIE
 
 
 // ── Types ──
-type DisplayMode = 'cards' | 'strands';
 
 type TimelineEvent = {
   label: string;
@@ -295,41 +294,6 @@ function clampYOffset(y: number, layerHeight: number) {
   return Math.min(layerHeight - EVENT_BOTTOM_MARGIN, Math.max(EVENT_TOP_MARGIN, y));
 }
 
-const STRAND_LABEL_STEP = 20;  // px per stagger step above or below the strand
-const STRAND_LABEL_BASE = 16;  // px from strand center to first label
-
-type StrandLabelPos = {
-  eventIndex: number;
-  side: 'above' | 'below';
-  yExtra: number; // additional stagger in px (0 = no collision)
-};
-
-function computeStrandLabels(
-  layerEvents: { e: TimelineEvent; globalIdx: number }[],
-  canvasWidth: number,
-): StrandLabelPos[] {
-  // Sort by x position within this layer
-  const sorted = [...layerEvents].sort((a, b) => a.e.x - b.e.x);
-  const positions: StrandLabelPos[] = sorted.map(({ globalIdx }, idx) => ({
-    eventIndex: globalIdx,
-    side: idx % 2 === 0 ? 'above' : 'below',
-    yExtra: 0,
-  }));
-
-  // Greedy collision pass: if adjacent same-side labels are within 90px
-  // horizontally, stagger the later one by one more step.
-  const lastRight: { above: number; below: number } = { above: -Infinity, below: -Infinity };
-  positions.forEach((pos, i) => {
-    const xPct = sorted[i].e.x;
-    if (lastRight[pos.side] !== -Infinity && xPct - lastRight[pos.side] < (90 / canvasWidth) * 100) {
-      pos.yExtra += STRAND_LABEL_STEP;
-    }
-    lastRight[pos.side] = xPct + (90 / canvasWidth) * 100;
-  });
-
-  return positions;
-}
-
 function getContrastColor(hex: string): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return '#2a2825';
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -338,44 +302,6 @@ function getContrastColor(hex: string): string {
   // Relative luminance (sRGB, simplified linear approximation)
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return luminance > 0.45 ? '#2a2825' : '#f5f3ef';
-}
-
-type StrandConnGeom =
-  | { kind: 'cubic'; x1: number; y1: number; cx1: number; cy1: number; cx2: number; cy2: number; x2: number; y2: number }
-  | { kind: 'quad';  x1: number; y1: number; cx: number;  cy: number;  x2: number; y2: number };
-
-function computeStrandConnectorGeometry(
-  fromEv: TimelineEvent,
-  toEv: TimelineEvent,
-  w: number,
-  lTops: number[],
-  lHeights: number[],
-  topH: number,
-  fromOffset = 0,
-  toOffset = 0,
-): StrandConnGeom {
-  const x1 = eventLeftPx(fromEv.x, w) + fromOffset;
-  const x2 = eventLeftPx(toEv.x, w)   + toOffset;
-  const lhFrom = lHeights[fromEv.layer] ?? LAYER_HEIGHT_DEFAULT;
-  const lhTo   = lHeights[toEv.layer]   ?? LAYER_HEIGHT_DEFAULT;
-  const y1 = topH + (lTops[fromEv.layer] ?? 0) + lhFrom / 2;
-  const y2 = topH + (lTops[toEv.layer]   ?? 0) + lhTo   / 2;
-  if (fromEv.layer === toEv.layer) {
-    // Same strand: small arc above the line so lateral connections are legible
-    const cx = (x1 + x2) / 2;
-    const cy = y1 - Math.min(lhFrom * 0.25, Math.abs(x2 - x1) * 0.12);
-    return { kind: 'quad', x1, y1, cx, cy, x2, y2 };
-  }
-  // Cross-strand: control points are (x1,midY) and (x2,midY) — all connectors in
-  // the same region share this rule, so they form parallel arcs instead of
-  // independent crossing diagonals (§1.3a curvature discipline).
-  const midY = (y1 + y2) / 2;
-  return { kind: 'cubic', x1, y1, cx1: x1, cy1: midY, cx2: x2, cy2: midY, x2, y2 };
-}
-
-function strandGeomToSVGPath(g: StrandConnGeom): string {
-  if (g.kind === 'quad') return `M ${g.x1} ${g.y1} Q ${g.cx} ${g.cy} ${g.x2} ${g.y2}`;
-  return `M ${g.x1} ${g.y1} C ${g.cx1} ${g.cy1}, ${g.cx2} ${g.cy2}, ${g.x2} ${g.y2}`;
 }
 
 // ── Sub-components ──
@@ -773,9 +699,6 @@ const ComplexityTimeline = () => {
   const [cuts, setCuts]               = useState<Cut[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string>('native');
   const [containerWidth, setContainerWidth] = useState(CANVAS_WIDTH_INIT);
-  const [svgWidth, setSvgWidth] = useState(0);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('strands');
-
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
   const [connectingFrom, setConnectingFrom]   = useState<number | null>(null);
   // Tentative source-side anchor, set by clicking one of the source card's
@@ -908,14 +831,12 @@ const ComplexityTimeline = () => {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // After displayMode commits (new elements mounted, cardRefs populated),
+  // After containerWidth changes (new elements mounted, cardRefs populated),
   // re-render once so connector geometry reads the correct ref dimensions.
   const [, forceReflow] = useReducer((x: number) => x + 1, 0);
   useLayoutEffect(() => {
-    const w = svgRef.current?.getBoundingClientRect().width ?? 0;
-    if (w > 0) setSvgWidth(w);
     forceReflow();
-  }, [displayMode, containerWidth]);
+  }, [containerWidth]);
 
   // ── ResizeObserver: track the canvas area's actual pixel width ──
   useEffect(() => {
@@ -1256,7 +1177,7 @@ const ComplexityTimeline = () => {
       version: TIMELINE_FILE_VERSION,
       layers, startYear, endYear,
       events, connections, columns, trends, cuts,
-      displayMode, selectedProfileId,
+      selectedProfileId,
       layerHeights,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1298,11 +1219,6 @@ const ComplexityTimeline = () => {
             EXPORT_PROFILES.some(p => p.id === data.selectedProfileId)) {
           setSelectedProfileId(data.selectedProfileId);
         }
-        setDisplayMode(
-          data.version >= 3 && (data.displayMode === 'cards' || data.displayMode === 'strands')
-            ? data.displayMode
-            : 'strands'
-        );
         // Clear any in-progress selection/edit state from the timeline we're replacing.
         setSelectedEvent(null);
         setSelectedTrend(null);
@@ -1444,133 +1360,6 @@ const ComplexityTimeline = () => {
     }
   }
 
-  function drawStrandsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0) {
-    ctx.fillStyle = BG_COLOR;
-    ctx.fillRect(0, 0, w, h);
-    // Columns (same as cards mode)
-    columns.forEach(col => {
-      const x = (yearToPct(col.startYear) / 100) * w;
-      const cw = (yearToPct(col.endYear) / 100) * w - x;
-      ctx.fillStyle = 'rgba(62,59,53,0.04)'; ctx.fillRect(x, 0, cw, h);
-      ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.strokeRect(x, 0, cw, h);
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
-      ctx.textAlign = 'center'; ctx.fillText(col.label, x + cw / 2, trendRegisterH + 18);
-    });
-
-    // Strand lines (one per layer)
-    layers.forEach((_, i) => {
-      const y = topReserveH + layerTops[i] + effectiveHeights[i] / 2;
-      ctx.save();
-      ctx.strokeStyle = '#3E3B35'; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w - 10, y); ctx.stroke();
-      // Arrowhead
-      ctx.globalAlpha = 0.5; ctx.fillStyle = '#3E3B35';
-      ctx.beginPath();
-      ctx.moveTo(w - 10, y);
-      ctx.lineTo(w - 18, y - 4);
-      ctx.lineTo(w - 18, y + 4);
-      ctx.closePath(); ctx.fill();
-      ctx.restore();
-    });
-
-    // Connections — mirrors DOM §1.3a: curvature discipline + anchor spreading + low opacity
-    // (hover isolation is DOM-only; PNG is a static snapshot with no selection state)
-    const connAtEvent = new Map<number, number[]>();
-    connections.forEach((conn, ci) => {
-      if (!connAtEvent.has(conn.from)) connAtEvent.set(conn.from, []);
-      if (!connAtEvent.has(conn.to))   connAtEvent.set(conn.to,   []);
-      connAtEvent.get(conn.from)!.push(ci);
-      connAtEvent.get(conn.to)!.push(ci);
-    });
-    connections.forEach((conn, i) => {
-      const fromConns  = connAtEvent.get(conn.from) ?? [];
-      const toConns    = connAtEvent.get(conn.to)   ?? [];
-      const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
-      const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
-      const geom = computeStrandConnectorGeometry(events[conn.from], events[conn.to], w, layerTops, effectiveHeights, topReserveH, fromOffset, toOffset);
-      ctx.save();
-      ctx.strokeStyle = '#7E7C78'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 4]);
-      ctx.beginPath();
-      ctx.moveTo(geom.x1, geom.y1);
-      if (geom.kind === 'quad') ctx.quadraticCurveTo(geom.cx, geom.cy, geom.x2, geom.y2);
-      else ctx.bezierCurveTo(geom.cx1, geom.cy1, geom.cx2, geom.cy2, geom.x2, geom.y2);
-      ctx.stroke();
-      ctx.restore();
-    });
-
-    // Event labels (plain text, alternating above/below per strand)
-    layers.forEach((_, layerIdx) => {
-      const strandY = topReserveH + layerTops[layerIdx] + effectiveHeights[layerIdx] / 2;
-      const layerEvts = events
-        .map((e, globalIdx) => ({ e, globalIdx }))
-        .filter(({ e }) => e.layer === layerIdx);
-      const labelPositions = computeStrandLabels(layerEvts, w);
-
-      labelPositions.forEach(({ eventIndex, side, yExtra }) => {
-        const ev = events[eventIndex];
-        const x = eventLeftPx(ev.x, w);
-        const baseOffset = STRAND_LABEL_BASE + yExtra;
-        const yPx = strandY + (side === 'above' ? -(baseOffset + ev.yOffset * 0.3) : (baseOffset + ev.yOffset * 0.3));
-        const fontSpec = scaledFont(11, fontScale, undefined, ev.style === 'italic');
-        ctx.font = fontSpec;
-        ctx.fillStyle = ev.borderColor || '#3E3B35';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(ev.label, x, yPx);
-        ctx.textBaseline = 'alphabetic';
-      });
-    });
-
-    // Layer labels (left-edge, like cards mode)
-    layers.forEach((lyr, i) => {
-      const y = topReserveH + layerTops[i];
-      ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
-      ctx.textAlign = 'left'; ctx.fillText(lyr, 10, y + 14);
-    });
-
-    // Cuts (same as cards mode)
-    cuts.forEach(cut => {
-      const x = (yearToPct((cut.startYear + cut.endYear) / 2) / 100) * w;
-      ctx.strokeStyle = '#3E3B35'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(x - 5, h); ctx.lineTo(x - 1, 0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
-    });
-
-    // Trend bands — staggered rows, sorted by start date
-    sortedTrends.forEach((trend, k) => {
-      const bandTop = 3 + k * TREND_SLOT_H;
-      const x  = (yearToPct(trend.startYear) / 100) * w;
-      const tw = (yearToPct(trend.endYear)   / 100) * w - x;
-      ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
-      ctx.fillRect(x, bandTop, tw, TREND_BAND_H); ctx.restore();
-      ctx.fillStyle = getContrastColor(trend.color);
-      ctx.font = scaledFont(9, fontScale);
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(trend.label.toUpperCase(), x + 6, bandTop + TREND_BAND_H / 2 + 3);
-      ctx.textBaseline = 'alphabetic';
-    });
-
-    // Separator rule
-    ctx.save(); ctx.strokeStyle = 'rgba(62,59,53,0.18)'; ctx.lineWidth = 0.5;
-    ctx.beginPath(); ctx.moveTo(0, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
-    ctx.restore();
-
-    // Year axis (same as cards mode)
-    const axY  = h - 48;
-    ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(w, axY); ctx.stroke();
-    for (let yr = displayStartYear; yr <= endYear; yr += 10) {
-      if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
-      const x = (yearToPct(yr) / 100) * w;
-      ctx.strokeStyle = '#8A867E';
-      ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
-      ctx.textAlign = 'center'; ctx.fillText(yr.toString(), x, axY + 18);
-    }
-  }
-
   const exportPNG = async (profile: ExportProfile) => {
     if (!timelineRef.current) return;
 
@@ -1599,8 +1388,7 @@ const ComplexityTimeline = () => {
       const ctx = canvas.getContext('2d')!;
       ctx.scale(scale, scale);
       const span = endYear - startYear;
-      if (displayMode === 'strands') drawStrandsMode(ctx, rect.width, rect.height, span, profile.fontScale);
-      else drawCardsMode(ctx, rect.width, rect.height, span, profile.fontScale);
+      drawCardsMode(ctx, rect.width, rect.height, span, profile.fontScale);
     } else {
       targetW = profile.pxWidth;
       targetH = Math.round(profile.pxWidth / profile.ratio);
@@ -1626,8 +1414,7 @@ const ComplexityTimeline = () => {
       const drawW = naturalW;
       const drawH = naturalH;
       const span  = endYear - startYear;
-      if (displayMode === 'strands') drawStrandsMode(ctx, drawW, drawH, span, profile.fontScale);
-      else drawCardsMode(ctx, drawW, drawH, span, profile.fontScale);
+      drawCardsMode(ctx, drawW, drawH, span, profile.fontScale);
     }
 
     canvas.toBlob(blob => {
@@ -1732,24 +1519,6 @@ const ComplexityTimeline = () => {
         )}
 
         <div className="u-toolbar-right">
-          <div className="u-width-controls">
-            <span className="u-year-label">Mode</span>
-            <button
-              className={`u-btn u-btn--mode ${displayMode === 'cards' ? 'u-btn--mode-active' : ''}`}
-              onClick={() => setDisplayMode('cards')}
-              title="Card mode — boxed event labels"
-            >
-              Cards
-            </button>
-            <button
-              className={`u-btn u-btn--mode ${displayMode === 'strands' ? 'u-btn--mode-active' : ''}`}
-              onClick={() => setDisplayMode('strands')}
-              title="Strand mode — Taylor-style continuous lines"
-            >
-              Strands
-            </button>
-          </div>
-
           <div className="u-width-controls">
             <span className="u-year-label">Size</span>
             <select
@@ -1861,99 +1630,37 @@ const ComplexityTimeline = () => {
                       </marker>
                     );
                   })}
-                  {/* strand arrowhead marker */}
-                  {displayMode === 'strands' && (
-                    <marker id="strand-arrow" markerWidth="8" markerHeight="6"
-                      refX="7" refY="3" orient="auto">
-                      <polygon points="0 0, 8 3, 0 6" fill="#3E3B35" fillOpacity="0.5" />
-                    </marker>
-                  )}
                 </defs>
-
-                {/* Strand lines — one per layer, rendered in strands mode */}
-                {displayMode === 'strands' && layers.map((_lyr, i) => {
-                  const y = topReserveH + layerTops[i] + effectiveHeights[i] / 2;
-                  const color = '#3E3B35';
-                  return (
-                    <line key={`strand-${i}`}
-                      x1={0} y1={y} x2="100%" y2={y}
-                      stroke={color} strokeWidth={1.5} strokeOpacity={0.45}
-                      markerEnd="url(#strand-arrow)"
-                    />
-                  );
-                })}
 
                 {/* Connections — halos first so later connections' halos don't erase earlier connections' visible lines */}
                 {(() => {
-                  // Pre-compute per-event connector lists so we can spread anchors apart when
-                  // multiple connections land on the same event point (§1.3a item 3).
-                  const connAtEvent = new Map<number, number[]>();
-                  if (displayMode === 'strands') {
-                    connections.forEach((conn, ci) => {
-                      if (!connAtEvent.has(conn.from)) connAtEvent.set(conn.from, []);
-                      if (!connAtEvent.has(conn.to))   connAtEvent.set(conn.to,   []);
-                      connAtEvent.get(conn.from)!.push(ci);
-                      connAtEvent.get(conn.to)!.push(ci);
-                    });
-                  }
-                  const svgW = svgWidth || canvasWidth;
-
-                  // In cards mode, render longest connections first so they sit underneath
-                  // shorter local connections at crossings. Strands mode keeps original order
-                  // because connAtEvent offset-spreading depends on stable insertion order.
-                  const renderOrder: number[] = displayMode === 'strands'
-                    ? connections.map((_, idx) => idx)
-                    : [...connections.keys()].sort((a, b) => {
-                        const fa = getEventPos(connections[a].from);
-                        const ta = getEventPos(connections[a].to);
-                        const fb = getEventPos(connections[b].from);
-                        const tb = getEventPos(connections[b].to);
-                        return Math.hypot(tb.x - fb.x, tb.y - fb.y) -
-                               Math.hypot(ta.x - fa.x, ta.y - fa.y);
-                      });
-
+                  if (connections.length === 0) return null;
+                  const renderOrder = [...connections.keys()].sort((a, b) => {
+                    const fa = getEventPos(connections[a].from);
+                    const ta = getEventPos(connections[a].to);
+                    const fb = getEventPos(connections[b].from);
+                    const tb = getEventPos(connections[b].to);
+                    return Math.hypot(tb.x - fb.x, tb.y - fb.y) -
+                           Math.hypot(ta.x - fa.x, ta.y - fa.y);
+                  });
                   return renderOrder.map(i => {
                     const conn = connections[i];
-                    let path: string;
-                    if (displayMode === 'strands') {
-                      const fromConns  = connAtEvent.get(conn.from) ?? [];
-                      const toConns    = connAtEvent.get(conn.to)   ?? [];
-                      const fromOffset = (fromConns.indexOf(i) - (fromConns.length - 1) / 2) * 3.5;
-                      const toOffset   = (toConns.indexOf(i)   - (toConns.length   - 1) / 2) * 3.5;
-                      path = strandGeomToSVGPath(
-                        computeStrandConnectorGeometry(events[conn.from], events[conn.to], svgW, layerTops, effectiveHeights, topReserveH, fromOffset, toOffset)
-                      );
-                    } else {
-                      const from = getEventPos(conn.from);
-                      const to   = getEventPos(conn.to);
+                    const from = getEventPos(conn.from);
+                    const to   = getEventPos(conn.to);
+                    const { path } = (() => {
                       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
-                      path = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
-                    }
-                    // Hover/select isolation: dim non-connected curves when an event is selected.
-                    const isActive = displayMode !== 'strands' || selectedEvent === null ||
-                                     conn.from === selectedEvent || conn.to === selectedEvent;
+                      return { path: `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}` };
+                    })();
                     return (
                       <g key={i}>
-                        {/* Halo drawn first per connection so each successive connection's halo
-                            erases the previous connection's visible line at crossings — creating
-                            the under-bridge effect via painter's algorithm ordering. */}
-                        {displayMode !== 'strands' && (
-                          <path d={path}
-                            stroke={BG_COLOR}
-                            strokeWidth={(conn.width ?? 2) + 6}
-                            fill="none"
-                            strokeLinecap="round"
-                          />
-                        )}
-                        <path d={path}
-                          stroke={displayMode === 'strands' ? '#7E7C78' : conn.color}
-                          strokeWidth={displayMode === 'strands' ? 1 : (conn.width ?? 2)}
-                          strokeOpacity={displayMode === 'strands' ? (isActive ? 0.35 : 0.1) : 1}
+                        <path d={path} stroke={BG_COLOR} strokeWidth={(conn.width ?? 2) + 6}
+                          fill="none" strokeLinecap="round" />
+                        <path d={path} stroke={conn.color}
+                          strokeWidth={conn.width ?? 2}
                           fill="none"
-                          strokeDasharray={displayMode === 'strands' ? '2 4' : (conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined)}
-                          markerEnd={displayMode === 'strands' ? undefined : (conn.showArrow ? `url(#arrow-${i})` : undefined)}
+                          strokeDasharray={conn.lineStyle === 'dashed' ? '6 4' : conn.lineStyle === 'dotted' ? '2 4' : undefined}
+                          markerEnd={conn.showArrow ? `url(#arrow-${i})` : undefined}
                         />
-                        {/* Invisible wide hit area — pointer-events re-enabled so the thin visible line is clickable. */}
                         <path d={path} stroke="transparent" strokeWidth={Math.max(16, (conn.width ?? 2) + 14)} fill="none"
                           style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                           onClick={e => { e.stopPropagation(); setSelectedConnection(prev => prev === i ? null : i); }}
@@ -1967,27 +1674,11 @@ const ComplexityTimeline = () => {
               {/* Connection action popups, positioned at the curve midpoint */}
               {connections.map((conn, i) => {
                 if (selectedConnection !== i) return null;
-                let midX: number, midY: number;
-                if (displayMode === 'strands') {
-                  const svgW = svgWidth || canvasWidth;
-                  const geom = computeStrandConnectorGeometry(
-                    events[conn.from], events[conn.to], svgW, layerTops, effectiveHeights, topReserveH
-                  );
-                  // midpoint of bezier at t=0.5
-                  if (geom.kind === 'quad') {
-                    midX = (geom.x1 + 2 * geom.cx + geom.x2) / 4;
-                    midY = (geom.y1 + 2 * geom.cy + geom.y2) / 4;
-                  } else {
-                    midX = (geom.x1 + 3 * geom.cx1 + 3 * geom.cx2 + geom.x2) / 8;
-                    midY = (geom.y1 + 3 * geom.cy1 + 3 * geom.cy2 + geom.y2) / 8;
-                  }
-                } else {
-                  const from = getEventPos(conn.from);
-                  const to   = getEventPos(conn.to);
-                  const { x1, y1, c1x, c1y, c2x, c2y, x2, y2 } =
-                    getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
-                  ({ x: midX, y: midY } = bezierMidpoint(x1, y1, c1x, c1y, c2x, c2y, x2, y2));
-                }
+                const from = getEventPos(conn.from);
+                const to   = getEventPos(conn.to);
+                const { x1, y1, c1x, c1y, c2x, c2y, x2, y2 } =
+                  getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
+                const { x: midX, y: midY } = bezierMidpoint(x1, y1, c1x, c1y, c2x, c2y, x2, y2);
                 return (
                   <div key={i} className="u-connection-actions" style={{ left: midX, top: midY }}>
                     <button className="u-event-action-btn" title="Edit connection"
@@ -2058,7 +1749,7 @@ const ComplexityTimeline = () => {
               </div>
 
               {/* Trend bands */}
-              {displayMode === 'cards' && sortedTrends.map((trend, k) => {
+              {sortedTrends.map((trend, k) => {
                 const origIdx = trends.indexOf(trend);
                 const left  = yearToPct(trend.startYear);
                 const width = yearToPct(trend.endYear) - left;
@@ -2121,40 +1812,8 @@ const ComplexityTimeline = () => {
                 </div>
               )}
 
-              {displayMode === 'strands' && sortedTrends.map((trend, k) => {
-                const origIdx = trends.indexOf(trend);
-                const left    = yearToPct(trend.startYear);
-                const width   = yearToPct(trend.endYear) - left;
-                const bandTop = 3 + k * TREND_SLOT_H;
-                return (
-                  <div key={k} className="u-strand-trend-bar" style={{
-                    left: `${left}%`, width: `${width}%`,
-                    top: bandTop, height: TREND_BAND_H,
-                    background: trend.color + '4D',
-                    color: getContrastColor(trend.color),
-                  }}
-                    onClick={e => { e.stopPropagation(); setSelectedTrend(prev => prev === origIdx ? null : origIdx); }}
-                    onDoubleClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
-                    {trend.label}
-                    {selectedTrend === origIdx && (
-                      <div className="u-trend-actions">
-                        <button className="u-event-action-btn" title="Edit trend"
-                          onClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
-                          <Edit2 size={13} />
-                        </button>
-                        <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
-                          onClick={e => { e.stopPropagation(); deleteTrend(origIdx); }}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
               {/* Events */}
               {events.map((event, i) => {
-                if (displayMode === 'strands') return null; // handled below
                 return (
                   <div
                     key={i}
@@ -2236,94 +1895,6 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {/* Strands mode event labels */}
-              {displayMode === 'strands' && layers.map((_, layerIdx) => {
-                const strandY = topReserveH + layerTops[layerIdx] + effectiveHeights[layerIdx] / 2;
-                const layerEvts = events
-                  .map((e, globalIdx) => ({ e, globalIdx }))
-                  .filter(({ e }) => e.layer === layerIdx);
-                const labelPositions = computeStrandLabels(layerEvts, canvasWidth);
-
-                return labelPositions.map(({ eventIndex, side, yExtra }) => {
-                  const event = events[eventIndex];
-                  const baseOffset = STRAND_LABEL_BASE + yExtra;
-                  const yPx = strandY + (side === 'above' ? -(baseOffset + event.yOffset * 0.3) : (baseOffset + event.yOffset * 0.3));
-                  return (
-                    <div
-                      key={eventIndex}
-                      draggable
-                      className={`u-strand-label ${selectedEvent === eventIndex ? 'u-strand-label--selected' : ''} ${event.style === 'italic' ? 'u-strand-label--italic' : ''} ${connectingFrom === eventIndex ? 'u-event-node--connecting' : ''}`}
-                      style={{
-                        left: eventLeft(event.x),
-                        top: `${yPx}px`,
-                        color: event.borderColor || '#3E3B35',
-                      }}
-                      ref={el => { cardRefs.current[eventIndex] = el as HTMLDivElement | null; }}
-                      onDragStart={e => handleDragStart(e, eventIndex)}
-                      onClick={e => handleEventClick(e, eventIndex)}
-                      onDoubleClick={e => {
-                        e.stopPropagation();
-                        if (connectingFrom !== null) return;
-                        setEditingEvent(eventIndex);
-                        setShowEventModal(event);
-                      }}
-                    >
-                      {event.label}
-                      {selectedEvent === eventIndex && (() => {
-                        const eventConns = connections.map((c, ci) => ({ c, ci })).filter(({ c }) => c.from === eventIndex || c.to === eventIndex);
-                        return (
-                        <div className="u-event-actions">
-                          <div className="u-event-actions-main">
-                          <button className="u-event-action-btn" title="Connect to another event"
-                            onClick={e => { e.stopPropagation(); setConnectingFrom(eventIndex); setConnectFromSide(null); setSelectedEvent(null); }}>
-                            <Link2 size={13} />
-                          </button>
-                          <button className="u-event-action-btn" title="Edit event"
-                            onClick={e => { e.stopPropagation(); setEditingEvent(eventIndex); setShowEventModal(event); }}>
-                            <Edit2 size={13} />
-                          </button>
-                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete event"
-                            onClick={e => { e.stopPropagation(); deleteEvent(eventIndex); }}>
-                            <Trash2 size={13} />
-                          </button>
-                          </div>
-                          {eventConns.map(({ c, ci }) => {
-                            const otherIdx = c.from === eventIndex ? c.to : c.from;
-                            const otherLabel = events[otherIdx]?.label || `Term ${otherIdx + 1}`;
-                            const dir = c.from === eventIndex ? '→' : '←';
-                            return (
-                              <div key={ci} className="u-event-conn-row">
-                                <span className="u-event-conn-label" title={otherLabel}>{dir} {otherLabel}</span>
-                                <button className="u-event-action-btn" title="Edit connection"
-                                  onClick={e => { e.stopPropagation(); setEditingConnection(ci); setShowConnectionModal(true); }}>
-                                  <Edit2 size={13} />
-                                </button>
-                                <button className="u-event-action-btn u-event-action-btn--danger" title="Delete connection"
-                                  onClick={e => { e.stopPropagation(); deleteConnection(ci); }}>
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        );
-                      })()}
-                      {connectingFrom !== null && (
-                        <>
-                          {(['top', 'right', 'bottom', 'left'] as Side[]).map(side => (
-                            <div
-                              key={side}
-                              className={`u-anchor-dot u-anchor-dot--${side} ${connectingFrom === eventIndex && connectFromSide === side ? 'u-anchor-dot--active' : ''}`}
-                              title={connectingFrom === eventIndex ? `Start the line from here (${side})` : `End the line here (${side})`}
-                              onClick={e => handleAnchorClick(e, eventIndex, side)}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  );
-                });
-              })}
             </>
           )}
           </div>
