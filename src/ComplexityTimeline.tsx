@@ -1295,41 +1295,50 @@ const ComplexityTimeline = () => {
     const y     = e.clientY - rect.top - topReserveH;
     const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
-    let yOffset = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
-    const year = Math.round(pctToYear(x));
-    // States snap below the lowest existing state in the target layer
     const droppedEv = events[draggingEvent];
-    if (droppedEv && (droppedEv.type ?? 'state') === 'state') {
+    const isState   = droppedEv && (droppedEv.type ?? 'state') === 'state';
+
+    if (isState) {
+      // yOffset is always auto-managed for states (locked vertically within a layer).
+      // Drop y only determines which layer band; yOffset comes from sibling stacking.
       const siblings = events
         .map((ev, idx) => ({ ev, idx }))
         .filter(({ ev, idx }) => idx !== draggingEvent && (ev.type ?? 'state') === 'state' && ev.layer === layer);
-      if (siblings.length > 0) {
-        const lowestBottom = Math.max(...siblings.map(({ ev, idx }) => {
-          const h = cardRefs.current[idx]?.offsetHeight ?? 36;
-          return ev.yOffset + h;
-        }));
-        yOffset = clampYOffset(lowestBottom + 20, effectiveHeights[layer]);
-      }
-    }
-    // When dragging a state, shift its auto-linked anchors by the same pixel delta.
-    const isMovingState = droppedEv && (droppedEv.type ?? 'state') === 'state';
-    const linkedAnchorIndices = isMovingState
-      ? connections.filter(c => c.autoLink && c.from === draggingEvent).map(c => c.to)
-      : [];
-    if (isMovingState && linkedAnchorIndices.length > 0) {
-      const w = rect.width;
-      const oldStatePx = eventLeftPx(droppedEv.x, w);
-      const newStatePx = eventLeftPx(x, w);
-      const delta = newStatePx - oldStatePx;
-      const pxToPct = (px: number) => ((px - EVENT_EDGE_PADDING) / (w - EVENT_EDGE_PADDING * 2)) * 100;
+      const yOffset = siblings.length > 0
+        ? clampYOffset(
+            Math.max(...siblings.map(({ ev, idx }) => {
+              const h = cardRefs.current[idx]?.offsetHeight ?? 36;
+              return ev.yOffset + h;
+            })) + 20,
+            effectiveHeights[layer]
+          )
+        : 0;
+
+      const year = Math.round(pctToYear(x));
+      const linkedAnchorIndices = connections
+        .filter(c => c.autoLink && c.from === draggingEvent)
+        .map(c => c.to);
+
       setEvents(ev => ev.map((evt, i) => {
         if (i === draggingEvent) return { ...evt, x, year, layer, yOffset };
-        if (linkedAnchorIndices.includes(i)) return { ...evt, x: pxToPct(eventLeftPx(evt.x, w) + delta) };
+        if (linkedAnchorIndices.includes(i)) {
+          // Anchors derive position from stored offset; inherit parent's new layer
+          return { ...evt, x: x + (evt.xOffsetPct ?? 0), layer };
+        }
         return evt;
       }));
     } else {
-      setEvents(ev => ev.map((evt, i) => i === draggingEvent ? { ...evt, x, year, layer, yOffset } : evt));
+      // Anchor drag: update position and xOffsetPct; year display label is untouched
+      const yOffset    = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
+      const parentConn = connections.find(c => c.autoLink && c.to === draggingEvent);
+      const parentX    = parentConn ? (events[parentConn.from]?.x ?? 0) : 0;
+      setEvents(ev => ev.map((evt, i) =>
+        i === draggingEvent
+          ? { ...evt, x, layer, yOffset, xOffsetPct: x - parentX }
+          : evt
+      ));
     }
+
     setDraggingEvent(null);
   };
 
