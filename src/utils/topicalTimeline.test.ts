@@ -1,51 +1,50 @@
 import { describe, it, expect } from 'vitest';
-import { getAnchorsForEra, formatEraRange } from './topicalTimeline';
+import { getEventsForEra, formatEraRange } from './topicalTimeline';
 
-describe('getAnchorsForEra', () => {
+describe('getEventsForEra', () => {
   const era = { startYear: 1990, endYear: 2005 };
 
-  it('returns empty array when no anchors', () => {
-    expect(getAnchorsForEra([], era)).toEqual([]);
+  it('returns empty array when no events', () => {
+    expect(getEventsForEra([], era)).toEqual([]);
   });
 
-  it('excludes state-type events', () => {
-    const events = [{ year: 1995, type: 'state' as const }];
-    expect(getAnchorsForEra(events, era)).toEqual([]);
-  });
-
-  it('excludes events with undefined type (legacy files default to state)', () => {
-    const events = [{ year: 1995, type: undefined }];
-    expect(getAnchorsForEra(events, era)).toEqual([]);
-  });
-
-  it('excludes anchors outside the era', () => {
+  it('excludes events outside the era', () => {
     const events = [
-      { year: 1989, type: 'anchor' as const },
-      { year: 2006, type: 'anchor' as const },
+      { label: 'Early', year: 1989 },
+      { label: 'Late',  year: 2006 },
     ];
-    expect(getAnchorsForEra(events, era)).toEqual([]);
+    expect(getEventsForEra(events, era)).toEqual([]);
   });
 
-  it('includes anchors at era boundary years', () => {
-    const a1 = { year: 1990, type: 'anchor' as const };
-    const a2 = { year: 2005, type: 'anchor' as const };
-    expect(getAnchorsForEra([a1, a2], era)).toHaveLength(2);
+  it('includes events at era boundary years', () => {
+    const e1 = { label: 'Start', year: 1990 };
+    const e2 = { label: 'End',   year: 2005 };
+    expect(getEventsForEra([e1, e2], era)).toHaveLength(2);
   });
 
-  it('includes all anchor-type events in era', () => {
-    const a1 = { year: 1995, type: 'anchor' as const };
-    const a2 = { year: 1997, type: 'anchor' as const };
-    const s  = { year: 1996, type: 'state' as const };
-    const result = getAnchorsForEra([a1, a2, s], era);
-    expect(result).toHaveLength(2);
+  it('includes all events within era', () => {
+    const events = [
+      { label: 'A', year: 1995 },
+      { label: 'B', year: 1997 },
+      { label: 'C', year: 2001 },
+    ];
+    expect(getEventsForEra(events, era)).toHaveLength(3);
   });
 
   it('sorts by year ascending', () => {
-    const a1 = { year: 2000, type: 'anchor' as const };
-    const a2 = { year: 1993, type: 'anchor' as const };
-    const result = getAnchorsForEra([a1, a2], era);
+    const events = [
+      { label: 'Later',   year: 2000 },
+      { label: 'Earlier', year: 1993 },
+    ];
+    const result = getEventsForEra(events, era);
     expect(result[0].year).toBe(1993);
     expect(result[1].year).toBe(2000);
+  });
+
+  it('includes icon field when present', () => {
+    const e = { label: 'With icon', year: 1995, icon: 'Star' };
+    const result = getEventsForEra([e], era);
+    expect(result[0].icon).toBe('Star');
   });
 });
 

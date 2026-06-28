@@ -1,17 +1,14 @@
-type MinimalAnchor = {
+export type TopicalEvent = {
+  label: string;
   year: number;
-  type?: 'state' | 'anchor';
+  icon?: string;
 };
 
 type Era = { startYear: number; endYear: number };
 
-export function getAnchorsForEra<T extends MinimalAnchor>(anchors: T[], era: Era): T[] {
-  return anchors
-    .filter(a =>
-      (a.type ?? 'state') === 'anchor' &&
-      a.year >= era.startYear &&
-      a.year <= era.endYear
-    )
+export function getEventsForEra(events: TopicalEvent[], era: Era): TopicalEvent[] {
+  return events
+    .filter(e => e.year >= era.startYear && e.year <= era.endYear)
     .sort((a, b) => a.year - b.year);
 }
 

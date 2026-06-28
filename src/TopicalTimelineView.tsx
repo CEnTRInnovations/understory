@@ -1,19 +1,7 @@
-import React, { forwardRef } from 'react';
-import {
-  Buildings, BookOpen, Users, Star, MapPin, ChartBar, Heart, GraduationCap,
-  Handshake, Megaphone, Globe, Newspaper, Certificate, Tree, Scales, Lightbulb,
-  Briefcase, FileText, PencilLine, Network, ArrowsCounterClockwise, Toolbox,
-  PresentationChart, ClipboardText, Medal, Link, House, Microphone, Compass,
-  Calendar, Flask, ChalkboardTeacher, CurrencyDollar, ArrowRight, Flag, Sparkle,
-} from '@phosphor-icons/react';
-import { getAnchorsForEra, formatEraRange } from './utils/topicalTimeline';
-
-type TimelineEvent = {
-  label: string;
-  year: number;
-  type: 'state' | 'anchor';
-  icon?: string;
-};
+import { forwardRef } from 'react';
+import { ICON_PALETTE } from './utils/iconPalette';
+import { getEventsForEra, formatEraRange } from './utils/topicalTimeline';
+import type { TopicalEvent } from './utils/topicalTimeline';
 
 type Column = {
   label: string;
@@ -28,55 +16,16 @@ export type TopicalTimelineViewProps = {
   title: string;
   subtitle?: string;
   eras: Column[];
-  anchors: TimelineEvent[];
+  events: TopicalEvent[];
   printMode?: boolean;
+  onAddEvent?: (era: Column) => void;
+  onEditEvent?: (event: TopicalEvent, index: number) => void;
 };
 
-type IconComponent = React.ComponentType<{ size?: string | number; color?: string }>;
-
-export const ICON_PALETTE: Array<{ name: string; Component: IconComponent }> = [
-  { name: 'Buildings',               Component: Buildings },
-  { name: 'BookOpen',                Component: BookOpen },
-  { name: 'Users',                   Component: Users },
-  { name: 'Star',                    Component: Star },
-  { name: 'MapPin',                  Component: MapPin },
-  { name: 'ChartBar',                Component: ChartBar },
-  { name: 'Heart',                   Component: Heart },
-  { name: 'GraduationCap',           Component: GraduationCap },
-  { name: 'Handshake',               Component: Handshake },
-  { name: 'Megaphone',               Component: Megaphone },
-  { name: 'Globe',                   Component: Globe },
-  { name: 'Newspaper',               Component: Newspaper },
-  { name: 'Certificate',             Component: Certificate },
-  { name: 'Tree',                    Component: Tree },
-  { name: 'Scales',                  Component: Scales },
-  { name: 'Lightbulb',               Component: Lightbulb },
-  { name: 'Briefcase',               Component: Briefcase },
-  { name: 'FileText',                Component: FileText },
-  { name: 'PencilLine',              Component: PencilLine },
-  { name: 'Network',                 Component: Network },
-  { name: 'ArrowsCounterClockwise',  Component: ArrowsCounterClockwise },
-  { name: 'Toolbox',                 Component: Toolbox },
-  { name: 'PresentationChart',       Component: PresentationChart },
-  { name: 'ClipboardText',           Component: ClipboardText },
-  { name: 'Medal',                   Component: Medal },
-  { name: 'Link',                    Component: Link },
-  { name: 'House',                   Component: House },
-  { name: 'Microphone',              Component: Microphone },
-  { name: 'Compass',                 Component: Compass },
-  { name: 'Calendar',                Component: Calendar },
-  { name: 'Flask',                   Component: Flask },
-  { name: 'ChalkboardTeacher',       Component: ChalkboardTeacher },
-  { name: 'CurrencyDollar',          Component: CurrencyDollar },
-  { name: 'ArrowRight',              Component: ArrowRight },
-  { name: 'Flag',                    Component: Flag },
-  { name: 'Sparkle',                 Component: Sparkle },
-];
-
-
+export { ICON_PALETTE };
 
 export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineViewProps>(
-  ({ title, subtitle, eras, anchors, printMode = false }, ref) => {
+  ({ title, subtitle, eras, events, printMode = false, onAddEvent, onEditEvent }, ref) => {
     const currentYear = new Date().getFullYear();
     const sorted = [...eras].sort((a, b) => a.startYear - b.startYear);
 
@@ -96,7 +45,7 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
 
         {/* Era columns */}
         {sorted.map((era) => {
-          const eraAnchors = getAnchorsForEra(anchors, era);
+          const eraEvents = getEventsForEra(events, era);
           const eraColor = era.color ?? '#D2BDA3';
 
           return (
@@ -118,22 +67,37 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
 
               {/* Event list */}
               <ul className="u-topical-event-list">
-                {eraAnchors.map((anchor, i) => {
-                  const IconComponent = ICON_PALETTE.find(p => p.name === anchor.icon)?.Component ?? null;
+                {eraEvents.map((event, i) => {
+                  const IconComponent = ICON_PALETTE.find(p => p.name === event.icon)?.Component ?? null;
                   return (
-                    <li key={`${i}-${anchor.year}`} className="u-topical-event">
+                    <li
+                      key={`${i}-${event.year}`}
+                      className={`u-topical-event${onEditEvent ? ' u-topical-event--editable' : ''}`}
+                      onClick={() => onEditEvent?.(event, events.indexOf(event))}
+                    >
                       <span className="u-topical-event-icon" style={{ color: eraColor }}>
                         {IconComponent
                           ? <IconComponent size={18} color={eraColor} />
                           : <span className="u-topical-event-dot" style={{ background: eraColor }} />
                         }
                       </span>
-                      <span className="u-topical-event-year">{anchor.year}</span>
-                      <span className="u-topical-event-label">{anchor.label}</span>
+                      <span className="u-topical-event-year">{event.year}</span>
+                      <span className="u-topical-event-label">{event.label}</span>
                     </li>
                   );
                 })}
               </ul>
+
+              {/* Per-era add button (hidden in print mode) */}
+              {!printMode && onAddEvent && (
+                <button
+                  className="u-topical-add-event"
+                  onClick={() => onAddEvent(era)}
+                  title="Add event to this era"
+                >
+                  +
+                </button>
+              )}
 
               {/* Footer */}
               {era.description && (
