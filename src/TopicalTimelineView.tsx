@@ -12,8 +12,6 @@ type TimelineEvent = {
   label: string;
   year: number;
   type: 'state' | 'anchor';
-  importance?: string;
-  visibleLabel?: boolean;
   icon?: string;
 };
 
@@ -77,13 +75,6 @@ export const ICON_PALETTE: Array<{ name: string; Component: IconComponent }> = [
 
 const ICON_MAP = Object.fromEntries(ICON_PALETTE.map(({ name, Component }) => [name, Component]));
 
-function hexToRgb(hex: string): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `${r}, ${g}, ${b}`;
-}
 
 export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineViewProps>(
   ({ title, subtitle, eras, anchors, printMode = false }, ref) => {
@@ -106,13 +97,12 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
         {sorted.map((era) => {
           const eraAnchors = getAnchorsForEra(anchors, era);
           const eraColor = era.color ?? '#D2BDA3';
-          const rgbColor = hexToRgb(eraColor);
 
           return (
             <div
               key={`${era.startYear}-${era.label}`}
               className="u-topical-col"
-              style={{ backgroundColor: `rgba(${rgbColor}, 0.12)`, borderTopColor: eraColor }}
+              style={{ backgroundColor: `${eraColor}1f`, borderTopColor: eraColor }}
             >
               {/* Column header */}
               <div className="u-topical-col-header">
