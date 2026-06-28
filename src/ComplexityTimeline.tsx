@@ -49,7 +49,7 @@ type Connection = {
 
 const DEFAULT_ARROW_SIZE = 8;
 
-type Layer  = { label: string; icon?: string };
+type Layer  = { label: string; icon?: string; color?: string };
 type Column = { label: string; startYear: number; endYear: number; dateRange?: string; briefDescription?: string; description?: string; color?: string };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
@@ -375,14 +375,15 @@ const LayerModal = ({
   onClose, onSave, initialData
 }: {
   onClose: () => void;
-  onSave: (name: string, description: string, icon?: string) => void;
-  initialData?: { name: string; description: string; icon?: string };
+  onSave: (name: string, description: string, icon?: string, color?: string) => void;
+  initialData?: { name: string; description: string; icon?: string; color?: string };
 }) => {
   const [name, setName] = useState(initialData?.name ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
   const [icon, setIcon] = useState<string | undefined>(initialData?.icon);
+  const [color, setColor] = useState(initialData?.color ?? '');
   const isEditing = initialData !== undefined;
-  const handleSave = () => { if (name.trim()) onSave(name.trim(), description.trim(), icon); };
+  const handleSave = () => { if (name.trim()) onSave(name.trim(), description.trim(), icon, color || undefined); };
   return (
     <Modal onClose={onClose} title={isEditing ? 'Edit Layer' : 'Add Layer'}>
       <div className="u-form-group">
@@ -430,6 +431,13 @@ const LayerModal = ({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+      <div className="u-form-group">
+        <label className="u-form-label">Band color <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input className="u-form-color" type="color" value={color || '#D2BDA3'} onChange={e => setColor(e.target.value)} />
+          {color && <button type="button" className="u-btn" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => setColor('')}>Clear</button>}
         </div>
       </div>
       <button className="u-btn u-btn--layer u-btn--full" onClick={handleSave} disabled={!name.trim()}>
@@ -1167,13 +1175,13 @@ const ComplexityTimeline = () => {
   }, []);
 
   // ── Layer ops ──
-  const saveLayer = (name: string, description: string, icon?: string) => {
+  const saveLayer = (name: string, description: string, icon?: string, color?: string) => {
     if (editingLayer !== null) {
-      setLayers(l => l.map((lyr, i) => i === editingLayer ? { label: name, icon } : lyr));
+      setLayers(l => l.map((lyr, i) => i === editingLayer ? { label: name, icon, color } : lyr));
       setLayerDescriptions(d => d.map((desc, i) => i === editingLayer ? description : desc));
       setEditingLayer(null);
     } else {
-      setLayers(l => [...l, { label: name, icon }]);
+      setLayers(l => [...l, { label: name, icon, color }]);
       setLayerDescriptions(d => [...d, description]);
       setLayerHeights([]);  // reset to uniform distribution for new layer count
     }
@@ -1637,14 +1645,15 @@ const ComplexityTimeline = () => {
     const rect = timelineRef.current.getBoundingClientRect();
     const evX  = eventLeftPx(ev.x, rect.width);
     if ((ev.type ?? 'state') === 'anchor') {
-      const dotTop     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
-      const anchorEl   = cardRefs.current[i];
-      // Use getBoundingClientRect for the rendered left edge of the anchor
-      // container; the dot (10px wide) is the first child, so its center is +5.
-      const dotCenterX = anchorEl
-        ? anchorEl.getBoundingClientRect().left - rect.left + 5
-        : evX;
-      return { x: dotCenterX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: 6 };
+      const dotTop   = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+      const anchorEl = cardRefs.current[i];
+      // evX is the CSS `left` center (transform: translateX(-50%)) — use it as the
+      // logical position for side-connector geometry so left/right anchor dots line
+      // up with connection exit points. autoLink paths override to dotCenterX so the
+      // vertical stem still threads through the physical dot circle.
+      const nodeEl  = anchorEl?.parentElement;
+      const halfW   = nodeEl ? nodeEl.offsetWidth / 2 : 6;
+      return { x: evX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: halfW };
     }
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
@@ -1763,7 +1772,13 @@ const ComplexityTimeline = () => {
       const to   = getEventPos(conn.to);
 
       if (conn.autoLink) {
-        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
+        // Thread through the physical dot, not the element center (evX).
+        const toAnchorEl = cardRefs.current[conn.to];
+        const tlRect = timelineRef.current?.getBoundingClientRect();
+        const ax = toAnchorEl && tlRect
+          ? toAnchorEl.getBoundingClientRect().left - tlRect.left + 5
+          : to.x;
+        const ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
         ctx.save();
         ctx.strokeStyle = BG_COLOR;
         ctx.lineWidth = (conn.width ?? 2) + 6;
@@ -1828,18 +1843,44 @@ const ComplexityTimeline = () => {
       }
     });
 
-    // Layer dividers + subtle alternating backgrounds + labels
+    // Layer dividers + backgrounds + labels/icons/descriptions
     layers.forEach((layer, i) => {
       const y = topReserveH + layerTops[i];
       const lh = effectiveHeights[i];
-      if (i % 2 === 1) {
+      if (layer.color) {
+        ctx.fillStyle = `${layer.color}20`;
+        ctx.fillRect(0, y, w, lh);
+      } else if (i % 2 === 1) {
         ctx.fillStyle = 'rgba(62,59,53,0.04)';
         ctx.fillRect(0, y, w, lh);
       }
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      // Icon
+      let labelX = 10;
+      if (layer.icon) {
+        ctx.save();
+        ctx.fillStyle = '#6b6760';
+        ctx.font = `${Math.round(12 * fontScale)}px "Material Symbols Outlined"`;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        ctx.fillText(layer.icon, 10, y + 14);
+        labelX = 26;
+        ctx.restore();
+      }
+      // Label (word-wrapped)
+      const maxLabelW = EVENT_EDGE_PADDING - labelX - 4;
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
-      ctx.textAlign = 'left'; ctx.fillText(layer.label, 10, y + 14);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      const labelLines = wrapCanvasText(ctx, layer.label, maxLabelW);
+      labelLines.forEach((line, li) => ctx.fillText(line, labelX, y + 14 + li * 12));
+      // Description (word-wrapped, smaller)
+      const desc = layerDescriptions[i] ?? '';
+      if (desc) {
+        ctx.font = scaledFont(9, fontScale);
+        ctx.fillStyle = '#8A867E';
+        const descLines = wrapCanvasText(ctx, desc, EVENT_EDGE_PADDING - 14);
+        descLines.forEach((line, li) => ctx.fillText(line, 10, y + 14 + labelLines.length * 12 + 2 + li * 11));
+      }
     });
 
     // Cuts
@@ -1875,14 +1916,18 @@ const ComplexityTimeline = () => {
       const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
 
       if ((ev.type ?? 'state') === 'anchor') {
-        // Dot on the left, year + label stacked to the right
+        // Resolve the physical dot center from the live DOM so the dot aligns
+        // with the autoLink vertical stem (which also uses dotCenterX).
+        const anchorEl = cardRefs.current[evi];
+        const tlRect   = timelineRef.current?.getBoundingClientRect();
+        const dotX     = anchorEl && tlRect ? anchorEl.getBoundingClientRect().left - tlRect.left + 5 : x;
         const dotR = 5;
-        const textX = x + dotR + 6; // 6px gap between dot right edge and text
+        const textX = dotX + dotR + 6;
         // Dot
         ctx.save();
         ctx.fillStyle = ev.color;
         ctx.beginPath();
-        ctx.arc(x, y + dotR + 2, dotR, 0, Math.PI * 2);
+        ctx.arc(dotX, y + dotR + 2, dotR, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
         // Year
@@ -1945,6 +1990,7 @@ const ComplexityTimeline = () => {
         document.fonts.load('10px "Alegreya Sans"'),
         document.fonts.load('500 10px "Alegreya Sans"'),
         document.fonts.load('italic 10px "Alegreya Sans"'),
+        document.fonts.load('12px "Material Symbols Outlined"'),
       ]);
       await document.fonts.ready;
     } catch { /* best effort */ }
@@ -2280,7 +2326,14 @@ const ComplexityTimeline = () => {
                     const to   = getEventPos(conn.to);
                     const { path } = (() => {
                       if (conn.autoLink) {
-                        const ax = to.x, ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
+                        // Use the physical dot center (left edge + 5) so the vertical
+                        // stem threads through the dot circle rather than evX.
+                        const toAnchorEl = cardRefs.current[conn.to];
+                        const tlRect = timelineRef.current?.getBoundingClientRect();
+                        const ax = toAnchorEl && tlRect
+                          ? toAnchorEl.getBoundingClientRect().left - tlRect.left + 5
+                          : to.x;
+                        const ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
                         return { path: `M ${ax} ${ay1} L ${ax} ${ay2}` };
                       }
                       const { x1, y1, x2, y2, c1x, c1y, c2x, c2y } = getConnectorGeometry(from, to, conn.fromSide, conn.toSide);
@@ -2342,12 +2395,14 @@ const ComplexityTimeline = () => {
               <div className="u-content-separator" style={{ top: topReserveH }} />
 
               {/* Layer row divider lines with subtle alternating backgrounds */}
-              {layers.map((_, i) => (
+              {layers.map((layer, i) => (
                 <div key={i} className="u-layer-row"
                   style={{
                     top: topReserveH + layerTops[i],
                     height: effectiveHeights[i],
-                    background: i % 2 === 1 ? 'rgba(62,59,53,0.04)' : 'transparent',
+                    background: layer.color
+                      ? `${layer.color}20`
+                      : (i % 2 === 1 ? 'rgba(62,59,53,0.04)' : 'transparent'),
                   }} />
               ))}
 
@@ -2655,7 +2710,7 @@ const ComplexityTimeline = () => {
           onClose={() => { setShowLayerModal(false); setEditingLayer(null); }}
           onSave={saveLayer}
           initialData={editingLayer !== null
-            ? { name: layers[editingLayer].label, description: layerDescriptions[editingLayer] ?? '', icon: layers[editingLayer].icon }
+            ? { name: layers[editingLayer].label, description: layerDescriptions[editingLayer] ?? '', icon: layers[editingLayer].icon, color: layers[editingLayer].color }
             : undefined}
         />
       )}
