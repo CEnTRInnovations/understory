@@ -1056,3 +1056,150 @@ body.u-dragging-layer {
   accent-color: var(--primary);
 }
 
+/* ── Topical Timeline View ───────────────────────────────── */
+
+.u-topical-root {
+  display: grid;
+  gap: 0;
+  background: #F2ECD7;
+  font-family: 'Alegreya Sans', sans-serif;
+  color: #4A4A4A;
+  min-height: 100%;
+}
+
+.u-topical-root--print * {
+  cursor: default !important;
+}
+
+.u-topical-header {
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid #D2BDA3;
+}
+
+.u-topical-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: #3E3B35;
+  letter-spacing: 0.01em;
+}
+
+.u-topical-subtitle {
+  font-size: 0.88rem;
+  font-style: italic;
+  margin: 0;
+  color: #6B625A;
+}
+
+.u-topical-col {
+  display: flex;
+  flex-direction: column;
+  border-top: 4px solid transparent;
+  border-right: 1px solid rgba(0,0,0,0.08);
+  min-height: 360px;
+}
+
+.u-topical-col:last-child {
+  border-right: none;
+}
+
+.u-topical-col-header {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+}
+
+.u-topical-era-range {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.u-topical-era-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+  line-height: 1.25;
+  color: #3E3B35;
+}
+
+.u-topical-era-subtitle {
+  font-size: 0.78rem;
+  font-style: italic;
+  margin: 0;
+  color: #6B625A;
+  line-height: 1.35;
+}
+
+.u-topical-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.u-topical-event {
+  display: grid;
+  grid-template-columns: 22px 44px 1fr;
+  align-items: start;
+  gap: 4px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.u-topical-event-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 1px;
+}
+
+.u-topical-event-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.u-topical-event-year {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #3E3B35;
+  white-space: nowrap;
+}
+
+.u-topical-event-label {
+  color: #4A4A4A;
+}
+
+.u-topical-col-footer {
+  padding: 12px 14px;
+  border-top: 1px solid transparent;
+  margin-top: auto;
+}
+
+.u-topical-shift-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6B625A;
+  margin-bottom: 6px;
+}
+
+.u-topical-shift-text {
+  font-size: 0.8rem;
+  font-style: italic;
+  margin: 0;
+  color: #4A4A4A;
+  line-height: 1.45;
+}
+
+/* ── /Topical Timeline View ──────────────────────────────── */
+
