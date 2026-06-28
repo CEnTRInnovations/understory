@@ -95,9 +95,9 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
                 <button
                   className="u-topical-add-event"
                   onClick={() => onAddEvent(era)}
-                  title="Add event to this era"
                 >
-                  +
+                  <span className="material-symbols-outlined" style={{ fontSize: 14, lineHeight: 1 }}>list_alt_add</span>
+                  Add event to this era
                 </button>
               )}
 

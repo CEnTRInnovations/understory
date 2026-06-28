@@ -619,7 +619,7 @@ const ColumnModal = ({
 };
 
 const TopicalEventModal = ({
-  onClose, onSave, onDelete, startYear, endYear, eraHint, initialData,
+  onClose, onSave, onDelete, startYear, endYear, eraHint, initialData, eras,
 }: {
   onClose: () => void;
   onSave: (data: TopicalEvent) => void;
@@ -628,9 +628,14 @@ const TopicalEventModal = ({
   endYear: number;
   eraHint?: Column;
   initialData?: TopicalEvent;
+  eras?: Column[];
 }) => {
-  const minYear = eraHint ? eraHint.startYear : startYear;
-  const maxYear = eraHint ? eraHint.endYear : endYear;
+  const [selectedEraLabel, setSelectedEraLabel] = useState(
+    initialData?.eraLabel ?? eraHint?.label ?? ''
+  );
+  const selectedEra = eras?.find(e => e.label === selectedEraLabel);
+  const minYear = selectedEra ? selectedEra.startYear : (eraHint ? eraHint.startYear : startYear);
+  const maxYear = selectedEra ? selectedEra.endYear : (eraHint ? eraHint.endYear : endYear);
   const [label, setLabel] = useState(initialData?.label ?? '');
   const [year, setYear]   = useState(initialData?.year ?? minYear);
   const [icon, setIcon]   = useState<string | undefined>(initialData?.icon);
@@ -643,6 +648,18 @@ const TopicalEventModal = ({
         <input className="u-form-input" type="text" placeholder="Event label"
           value={label} onChange={e => setLabel(e.target.value)} autoFocus />
       </div>
+      {eras && eras.length > 0 && (
+        <div className="u-form-group">
+          <label className="u-form-label">Era</label>
+          <select className="u-form-input" value={selectedEraLabel}
+            onChange={e => setSelectedEraLabel(e.target.value)}>
+            <option value="">— none —</option>
+            {eras.map(era => (
+              <option key={era.label} value={era.label}>{era.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="u-form-group">
         <label className="u-form-label">Year</label>
         <input className="u-form-input" type="number"
@@ -674,7 +691,7 @@ const TopicalEventModal = ({
         </div>
       </div>
       <button className="u-btn u-btn--column u-btn--full"
-        onClick={() => label.trim() && onSave({ label: label.trim(), year, icon })}
+        onClick={() => label.trim() && onSave({ label: label.trim(), year, icon, eraLabel: selectedEraLabel || undefined })}
         disabled={!label.trim()}>
         {isEditing ? 'Save Event' : 'Add Event'}
       </button>
@@ -1400,13 +1417,11 @@ const ComplexityTimeline = () => {
   };
   const saveTopicalEvent = (data: TopicalEvent) => {
     if (typeof showTopicalEventModal === 'object' && showTopicalEventModal.index !== undefined) {
-      const existing = topicalEvents[showTopicalEventModal.index];
       setTopicalEvents(evs => evs.map((ev, i) =>
-        i === showTopicalEventModal.index ? { ...data, eraLabel: existing.eraLabel } : ev
+        i === showTopicalEventModal.index ? data : ev
       ));
     } else {
-      const eraLabel = typeof showTopicalEventModal === 'object' ? showTopicalEventModal.eraHint?.label : undefined;
-      setTopicalEvents(evs => [...evs, { ...data, eraLabel }]);
+      setTopicalEvents(evs => [...evs, data]);
     }
     setShowTopicalEventModal(false);
   };
@@ -2043,7 +2058,7 @@ const ComplexityTimeline = () => {
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
             <Columns size={13} /> Add Era
           </button>
-          <button className="u-btn u-btn--column" onClick={() => setShowTopicalEventModal({})}>
+          <button className="u-btn u-btn--outline-column" onClick={() => setShowTopicalEventModal({})}>
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>list_alt_add</span> Add Event
           </button>
         </>)}
@@ -2683,6 +2698,7 @@ const ComplexityTimeline = () => {
           endYear={endYear}
           eraHint={showTopicalEventModal.eraHint}
           initialData={showTopicalEventModal.initialData}
+          eras={columns}
         />
       )}
     </div>
