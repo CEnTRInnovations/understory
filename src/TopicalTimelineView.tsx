@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { getEventsForEra, formatEraRange } from './utils/topicalTimeline';
+import { getEventsForEra } from './utils/topicalTimeline';
 import type { TopicalEvent } from './utils/topicalTimeline';
 
 type Column = {
@@ -7,6 +7,7 @@ type Column = {
   startYear: number;
   endYear: number;
   dateRange?: string;
+  briefDescription?: string;
   description?: string;
   color?: string;
 };
@@ -24,7 +25,6 @@ export type TopicalTimelineViewProps = {
 
 export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineViewProps>(
   ({ title, subtitle, eras, events, printMode = false, onAddEvent, onEditEvent, onEditEra }, ref) => {
-    const currentYear = new Date().getFullYear();
     const sorted = [...eras].sort((a, b) => a.startYear - b.startYear);
 
     if (sorted.length === 0) return null;
@@ -59,47 +59,50 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
                 className={`u-topical-col-header${onEditEra && !printMode ? ' u-topical-col-header--editable' : ''}`}
                 onClick={() => !printMode && onEditEra?.(era)}
               >
-                <span className="u-topical-era-range" style={{ color: eraColor }}>
-                  {formatEraRange(era, currentYear)}
-                </span>
+                {era.briefDescription && (
+                  <span className="u-topical-era-description" style={{ color: eraColor }}>
+                    {era.briefDescription}
+                  </span>
+                )}
                 <h2 className="u-topical-era-title">{era.label}</h2>
                 {era.dateRange && (
                   <p className="u-topical-era-subtitle">{era.dateRange}</p>
                 )}
               </div>
 
-              {/* Event list */}
-              <ul className="u-topical-event-list">
-                {eraEvents.map((event, i) => {
-                  return (
-                    <li
-                      key={`${i}-${event.year}`}
-                      className={`u-topical-event${onEditEvent ? ' u-topical-event--editable' : ''}`}
-                      onClick={() => onEditEvent?.(event, events.indexOf(event))}
-                    >
-                      <span className="u-topical-event-icon" style={{ color: eraColor }}>
-                        {event.icon
-                          ? <span className="material-symbols-outlined" style={{ fontSize: 18, color: eraColor, lineHeight: 1 }}>{event.icon}</span>
-                          : <span className="u-topical-event-dot" style={{ background: eraColor }} />
-                        }
-                      </span>
-                      <span className="u-topical-event-year">{event.year}</span>
-                      <span className="u-topical-event-label">{event.label}</span>
-                    </li>
-                  );
-                })}
-              </ul>
+              {/* Event list + add button share a body row for subgrid alignment */}
+              <div className="u-topical-col-body">
+                <ul className="u-topical-event-list">
+                  {eraEvents.map((event, i) => {
+                    return (
+                      <li
+                        key={`${i}-${event.year}`}
+                        className={`u-topical-event${onEditEvent ? ' u-topical-event--editable' : ''}`}
+                        onClick={() => onEditEvent?.(event, events.indexOf(event))}
+                      >
+                        <span className="u-topical-event-icon" style={{ color: eraColor }}>
+                          {event.icon
+                            ? <span className="material-symbols-outlined" style={{ fontSize: 18, color: eraColor, lineHeight: 1 }}>{event.icon}</span>
+                            : <span className="u-topical-event-dot" style={{ background: eraColor }} />
+                          }
+                        </span>
+                        <span className="u-topical-event-year">{event.year}</span>
+                        <span className="u-topical-event-label">{event.label}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
 
-              {/* Per-era add button (hidden in print mode) */}
-              {!printMode && onAddEvent && (
-                <button
-                  className="u-topical-add-event"
-                  onClick={() => onAddEvent(era)}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 14, lineHeight: 1 }}>list_alt_add</span>
-                  Add event to this era
-                </button>
-              )}
+                {!printMode && onAddEvent && (
+                  <button
+                    className="u-topical-add-event"
+                    onClick={() => onAddEvent(era)}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, lineHeight: 1 }}>list_alt_add</span>
+                    Add event to this era
+                  </button>
+                )}
+              </div>
 
               {/* Footer */}
               {era.description && (

@@ -50,7 +50,7 @@ type Connection = {
 const DEFAULT_ARROW_SIZE = 8;
 
 type Layer  = { label: string; icon?: string };
-type Column = { label: string; startYear: number; endYear: number; dateRange?: string; description?: string; color?: string };
+type Column = { label: string; startYear: number; endYear: number; dateRange?: string; briefDescription?: string; description?: string; color?: string };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
 
@@ -567,12 +567,13 @@ const ColumnModal = ({
   endYear: number;
   initialData?: Column;
 }) => {
-  const [label, setLabel]           = useState(initialData?.label ?? '');
-  const [colStart, setColStart]     = useState(initialData?.startYear ?? startYear);
-  const [colEnd, setColEnd]         = useState(initialData?.endYear ?? endYear);
-  const [dateRange, setDateRange]   = useState(initialData?.dateRange ?? '');
-  const [description, setDescription] = useState(initialData?.description ?? '');
-  const [color, setColor]             = useState(initialData?.color ?? '#D2BDA3');
+  const [label, setLabel]                   = useState(initialData?.label ?? '');
+  const [colStart, setColStart]             = useState(initialData?.startYear ?? startYear);
+  const [colEnd, setColEnd]                 = useState(initialData?.endYear ?? endYear);
+  const [dateRange, setDateRange]           = useState(initialData?.dateRange ?? '');
+  const [briefDescription, setBriefDescription] = useState(initialData?.briefDescription ?? '');
+  const [description, setDescription]       = useState(initialData?.description ?? '');
+  const [color, setColor]                   = useState(initialData?.color ?? '#D2BDA3');
   const isEditing = !!initialData;
 
   return (
@@ -593,9 +594,14 @@ const ColumnModal = ({
         </div>
       </div>
       <div className="u-form-group">
-        <label className="u-form-label">Date range (optional)</label>
+        <label className="u-form-label">Date range <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
         <input className="u-form-input" type="text" placeholder="e.g. 1960s–1980s"
           value={dateRange} onChange={e => setDateRange(e.target.value)} />
+      </div>
+      <div className="u-form-group">
+        <label className="u-form-label">Brief description <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
+        <input className="u-form-input" type="text" placeholder="Short characterization of this era"
+          value={briefDescription} onChange={e => setBriefDescription(e.target.value)} />
       </div>
       <div className="u-form-group">
         <label className="u-form-label">Main institutional shift <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
@@ -609,6 +615,7 @@ const ColumnModal = ({
       <button className="u-btn u-btn--column u-btn--full" onClick={() => label.trim() && onSave({
         label: label.trim(), startYear: colStart, endYear: colEnd,
         dateRange: dateRange.trim() || undefined,
+        briefDescription: briefDescription.trim() || undefined,
         description: description.trim() || undefined,
         color: color || undefined,
       })} disabled={!label.trim()}>
