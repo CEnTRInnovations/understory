@@ -338,6 +338,23 @@ function clampYOffset(y: number, layerHeight: number) {
   return Math.min(layerHeight - EVENT_BOTTOM_MARGIN, Math.max(EVENT_TOP_MARGIN, y));
 }
 
+// The year range a column's decade ticks should span. Prefers the header
+// dateRange (what the reader sees, e.g. "1968-1992" or "2022-Present"); falls
+// back to the column's layout startYear/endYear when no parseable range exists.
+// "Present" (or any non-numeric end) resolves to the timeline's end year.
+function columnTickRange(
+  col: { startYear: number; endYear: number; dateRange?: string },
+  timelineEndYear: number
+): [number, number] {
+  const m = col.dateRange?.match(/(\d{3,4})\s*[-–—]\s*(\d{3,4}|present)/i);
+  if (m) {
+    const start = parseInt(m[1], 10);
+    const end = /^\d/.test(m[2]) ? parseInt(m[2], 10) : timelineEndYear;
+    if (end > start) return [start, end];
+  }
+  return [col.startYear, col.endYear];
+}
+
 function getContrastColor(hex: string): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return '#2a2825';
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -2134,15 +2151,17 @@ const ComplexityTimeline = () => {
     ctx.strokeStyle = '#8A867E'; ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     if (columns.length > 0) {
-      // Per-column proportional: position each decade tick within the column that
-      // contains it, proportional to that column's start/end year range.
+      // Per-column proportional: each column is its own mini-timeline. Decade
+      // ticks are derived from the period SHOWN in the column header (dateRange,
+      // e.g. "1968-1992") and spread across the column's pixel width — so the
+      // decades a reader expects from the label land inside that column.
       columns.forEach(col => {
         const colLeft  = eventLeftPx(yearToPct(col.startYear), w);
         const colRight = eventLeftPx(yearToPct(col.endYear), w);
-        const colSpan  = col.endYear - col.startYear;
-        for (let yr = Math.ceil(col.startYear / 10) * 10; yr <= col.endYear; yr += 10) {
-          if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
-          const frac = colSpan > 0 ? (yr - col.startYear) / colSpan : 0;
+        const [tickStart, tickEnd] = columnTickRange(col, endYear);
+        const tickSpan = tickEnd - tickStart;
+        for (let yr = Math.ceil(tickStart / 10) * 10; yr <= tickEnd; yr += 10) {
+          const frac = tickSpan > 0 ? (yr - tickStart) / tickSpan : 0;
           const x = colLeft + frac * (colRight - colLeft);
           ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
           ctx.fillText(yr.toString(), x, axY + 18);
