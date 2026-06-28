@@ -1842,11 +1842,12 @@ const ComplexityTimeline = () => {
     // Temporarily enable print mode to remove hover/scroll artifacts
     el.classList.add('u-topical-root--print');
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const canvas = await html2canvas(el, {
-        background: '#F2ECD7',
+        backgroundColor: '#F2ECD7',
+        scale: 2,
+        useCORS: true,
         logging: false,
-      } as any);
+      });
       canvas.toBlob(blob => {
         if (!blob) return;
         const a = document.createElement('a');
