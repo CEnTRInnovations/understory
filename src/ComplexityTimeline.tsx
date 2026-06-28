@@ -28,7 +28,6 @@ type TimelineEvent = {
   width?: number;    // states only; px; undefined = auto-size to content
   endYear?: number;  // states only; when set alongside year (startYear), defines the span
   xOffsetPct?: number; // anchors only: signed offset from parent state's x (% units)
-  icon?: string;        // anchors only: Phosphor icon name for topical timeline view
 };
 
 type Connection = {
@@ -434,7 +433,6 @@ const EventModal = ({
   const [color, setColor]         = useState(initialData?.color       ?? (eventType === 'anchor' ? '#3E3B35' : BG_COLOR));
   const [borderColor, setBorder]  = useState(initialData?.borderColor ?? '#3E3B35');
   const [style, setStyle]         = useState<'normal'|'italic'>(initialData?.style ?? 'normal');
-  const [icon, setIcon]           = useState<string | undefined>(initialData?.icon);
 
   const statesInLayer = (l: number) =>
     events.map((ev, idx) => ({ ev, idx })).filter(({ ev }) => (ev.type ?? 'state') === 'state' && ev.layer === l);
@@ -464,7 +462,7 @@ const EventModal = ({
     // Preserve an existing resize-width only when no endYear is active
     const width = parsedEndYear !== undefined ? undefined : initialData?.width;
     onSave(
-      { label: label.trim(), year, endYear: parsedEndYear, layer, x, yOffset, color, borderColor, style, type: eventType, width, xOffsetPct: initialData?.xOffsetPct, icon: eventType === 'anchor' ? icon : undefined },
+      { label: label.trim(), year, endYear: parsedEndYear, layer, x, yOffset, color, borderColor, style, type: eventType, width, xOffsetPct: initialData?.xOffsetPct },
       eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
     );
   };
@@ -546,32 +544,6 @@ const EventModal = ({
           <option value="italic">Italic</option>
         </select>
       </div>
-      {!isState && (
-        <div className="u-form-group">
-          <label className="u-form-label">Icon <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
-          <div className="u-icon-picker">
-            <button
-              type="button"
-              className={`u-icon-picker-item${!icon ? ' u-icon-picker-item--selected' : ''}`}
-              onClick={() => setIcon(undefined)}
-              title="None"
-            >
-              <span style={{ fontSize: '0.7rem', color: '#6B625A' }}>–</span>
-            </button>
-            {ICON_PALETTE.map(({ name, Component }) => (
-              <button
-                key={name}
-                type="button"
-                className={`u-icon-picker-item${icon === name ? ' u-icon-picker-item--selected' : ''}`}
-                onClick={() => setIcon(name)}
-                title={name}
-              >
-                <Component size={16} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       <button className="u-btn u-btn--event u-btn--full" onClick={handleSave} disabled={!label.trim()}>
         {title}
       </button>
