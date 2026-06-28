@@ -2,13 +2,16 @@ export type TopicalEvent = {
   label: string;
   year: number;
   icon?: string;
+  eraLabel?: string;
 };
 
-type Era = { startYear: number; endYear: number };
+type Era = { label: string; startYear: number; endYear: number };
 
 export function getEventsForEra(events: TopicalEvent[], era: Era): TopicalEvent[] {
   return events
-    .filter(e => e.year >= era.startYear && e.year <= era.endYear)
+    .filter(e => e.eraLabel !== undefined
+      ? e.eraLabel === era.label
+      : e.year >= era.startYear && e.year <= era.endYear)
     .sort((a, b) => a.year - b.year);
 }
 

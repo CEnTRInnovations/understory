@@ -1107,6 +1107,12 @@ body.u-dragging-layer {
   padding: 16px 16px 12px;
   border-bottom: 1px solid rgba(0,0,0,0.07);
 }
+.u-topical-col-header--editable {
+  cursor: pointer;
+}
+.u-topical-col-header--editable:hover {
+  background: rgba(0,0,0,0.04);
+}
 
 .u-topical-era-range {
   display: block;

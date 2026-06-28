@@ -1400,9 +1400,13 @@ const ComplexityTimeline = () => {
   };
   const saveTopicalEvent = (data: TopicalEvent) => {
     if (typeof showTopicalEventModal === 'object' && showTopicalEventModal.index !== undefined) {
-      setTopicalEvents(evs => evs.map((ev, i) => i === showTopicalEventModal.index ? data : ev));
+      const existing = topicalEvents[showTopicalEventModal.index];
+      setTopicalEvents(evs => evs.map((ev, i) =>
+        i === showTopicalEventModal.index ? { ...data, eraLabel: existing.eraLabel } : ev
+      ));
     } else {
-      setTopicalEvents(evs => [...evs, data]);
+      const eraLabel = typeof showTopicalEventModal === 'object' ? showTopicalEventModal.eraHint?.label : undefined;
+      setTopicalEvents(evs => [...evs, { ...data, eraLabel }]);
     }
     setShowTopicalEventModal(false);
   };
@@ -2040,7 +2044,7 @@ const ComplexityTimeline = () => {
             <Columns size={13} /> Add Era
           </button>
           <button className="u-btn u-btn--column" onClick={() => setShowTopicalEventModal({})}>
-            <Plus size={13} /> Add Event
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>list_alt_add</span> Add Event
           </button>
         </>)}
 
@@ -2592,6 +2596,7 @@ const ComplexityTimeline = () => {
             printMode={topicalPrintMode}
             onAddEvent={era => setShowTopicalEventModal({ eraHint: era })}
             onEditEvent={(event, index) => setShowTopicalEventModal({ initialData: event, index })}
+            onEditEra={era => { const idx = columns.indexOf(era); setEditingColumn(idx); setShowColumnModal(true); }}
           />
         </div>
       )}

@@ -19,10 +19,11 @@ export type TopicalTimelineViewProps = {
   printMode?: boolean;
   onAddEvent?: (era: Column) => void;
   onEditEvent?: (event: TopicalEvent, index: number) => void;
+  onEditEra?: (era: Column) => void;
 };
 
 export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineViewProps>(
-  ({ title, subtitle, eras, events, printMode = false, onAddEvent, onEditEvent }, ref) => {
+  ({ title, subtitle, eras, events, printMode = false, onAddEvent, onEditEvent, onEditEra }, ref) => {
     const currentYear = new Date().getFullYear();
     const sorted = [...eras].sort((a, b) => a.startYear - b.startYear);
 
@@ -54,7 +55,10 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
               style={{ backgroundColor: `${eraColor}1f`, borderTopColor: eraColor }}
             >
               {/* Column header */}
-              <div className="u-topical-col-header">
+              <div
+                className={`u-topical-col-header${onEditEra && !printMode ? ' u-topical-col-header--editable' : ''}`}
+                onClick={() => !printMode && onEditEra?.(era)}
+              >
                 <span className="u-topical-era-range" style={{ color: eraColor }}>
                   {formatEraRange(era, currentYear)}
                 </span>
