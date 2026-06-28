@@ -1237,3 +1237,9 @@ body.u-dragging-layer {
 }
 
 /* ── /Icon picker ────────────────────────────────────────── */
+
+.u-topical-area {
+  flex: 1;
+  overflow: auto;
+  background: #F2ECD7;
+}
