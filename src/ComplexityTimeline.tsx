@@ -1779,7 +1779,21 @@ const ComplexityTimeline = () => {
 
         setEvents(eventsWithOffsets);
         setConnections(rawConnections);
-        setColumns(Array.isArray(data.columns) ? data.columns : []);
+        // Redistribute columns to equal proportional widths (same logic as addColumn)
+        // using the file's year range so the layout matches what the user expects.
+        const loadedCols: Column[] = Array.isArray(data.columns) ? data.columns : [];
+        if (loadedCols.length > 0) {
+          const ls = typeof data.startYear === 'number' ? data.startYear : 2008;
+          const le = typeof data.endYear   === 'number' ? data.endYear   : 2025;
+          const n = loadedCols.length, span = le - ls;
+          setColumns(loadedCols.map((col, i) => ({
+            ...col,
+            startYear: i === 0     ? ls : Math.round(ls + (i * span) / n),
+            endYear:   i === n - 1 ? le : Math.round(ls + ((i + 1) * span) / n),
+          })));
+        } else {
+          setColumns([]);
+        }
         setTrends(Array.isArray(data.trends) ? data.trends : []);
         setCuts(Array.isArray(data.cuts) ? data.cuts : []);
         if (typeof data.selectedProfileId === 'string' &&
