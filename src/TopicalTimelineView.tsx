@@ -59,14 +59,14 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
                 className={`u-topical-col-header${onEditEra && !printMode ? ' u-topical-col-header--editable' : ''}`}
                 onClick={() => !printMode && onEditEra?.(era)}
               >
-                {era.briefDescription && (
+                {era.dateRange && (
                   <span className="u-topical-era-description" style={{ color: eraColor }}>
-                    {era.briefDescription}
+                    {era.dateRange}
                   </span>
                 )}
                 <h2 className="u-topical-era-title">{era.label}</h2>
-                {era.dateRange && (
-                  <p className="u-topical-era-subtitle">{era.dateRange}</p>
+                {era.briefDescription && (
+                  <p className="u-topical-era-subtitle">{era.briefDescription}</p>
                 )}
               </div>
 

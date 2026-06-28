@@ -134,6 +134,26 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+async function saveWithPicker(blob: Blob, suggestedName: string, mimeType: string, ext: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ('showSaveFilePicker' in window) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName,
+        types: [{ description: 'File', accept: { [mimeType]: [ext] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+    }
+  }
+  downloadBlob(blob, suggestedName);
+}
+
 function autoSide(center: { x: number; y: number }, other: { x: number; y: number }): Side {
   const dx = other.x - center.x;
   const dy = other.y - center.y;
@@ -1635,7 +1655,7 @@ const ComplexityTimeline = () => {
   // reason about older files (e.g. ones missing selectedProfileId).
   const TIMELINE_FILE_VERSION = 4;
 
-  const exportJSON = () => {
+  const exportJSON = async () => {
     const data = {
       version: TIMELINE_FILE_VERSION,
       layers, layerDescriptions, startYear, endYear,
@@ -1645,7 +1665,7 @@ const ComplexityTimeline = () => {
       topicalEvents,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    downloadBlob(blob, 'understory-timeline.und');
+    await saveWithPicker(blob, 'understory-timeline.und', 'application/json', '.und');
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1964,10 +1984,8 @@ const ComplexityTimeline = () => {
       drawCardsMode(ctx, drawW, drawH, span, profile.fontScale);
     }
 
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      downloadBlob(blob, 'understory-timeline.png');
-    }, 'image/png');
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (blob) await saveWithPicker(blob, 'understory-timeline.png', 'image/png', '.png');
   };
 
   const exportTopicalPNG = async () => {
@@ -1980,10 +1998,8 @@ const ComplexityTimeline = () => {
         useCORS: true,
         logging: false,
       });
-      canvas.toBlob(blob => {
-        if (!blob) return;
-        downloadBlob(blob, 'understory-topical-timeline.png');
-      }, 'image/png');
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (blob) await saveWithPicker(blob, 'understory-topical-timeline.png', 'image/png', '.png');
     } catch (err) {
       console.error('Topical PNG export failed:', err);
     } finally {
