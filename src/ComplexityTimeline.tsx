@@ -1702,7 +1702,8 @@ const ComplexityTimeline = () => {
       // vertical stem still threads through the physical dot circle.
       const nodeEl  = anchorEl?.parentElement;
       const halfW   = nodeEl ? nodeEl.offsetWidth / 2 : 6;
-      return { x: evX, y: dotTop + 6, top: dotTop, bottom: dotTop + 12, halfWidth: halfW };
+      const nodeH   = nodeEl ? nodeEl.offsetHeight : 12;
+      return { x: evX, y: dotTop + 6, top: dotTop, bottom: dotTop + nodeH, halfWidth: halfW };
     }
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
@@ -2154,11 +2155,6 @@ const ComplexityTimeline = () => {
   if (!yearTicks.includes(endYear)) yearTicks.push(endYear);
   // Always mark the boundary years of each cut, so the break reads clearly.
   cuts.forEach(c => {
-    if (!yearTicks.includes(c.startYear)) yearTicks.push(c.startYear);
-    if (!yearTicks.includes(c.endYear))   yearTicks.push(c.endYear);
-  });
-  // Mark column boundary years so column edges line up with tick marks.
-  columns.forEach(c => {
     if (!yearTicks.includes(c.startYear)) yearTicks.push(c.startYear);
     if (!yearTicks.includes(c.endYear))   yearTicks.push(c.endYear);
   });

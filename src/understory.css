@@ -507,12 +507,13 @@ body.u-dragging-layer {
   top: 50%;
   transform: translate(-50%, -50%);
   font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-muted);
-  white-space: nowrap;
-  padding: 1px 6px;
+  white-space: normal;
+  padding: 1px 4px;
+  max-width: 80%;
   pointer-events: auto;
   cursor: pointer;
   text-align: center;
@@ -520,22 +521,21 @@ body.u-dragging-layer {
 .u-col-header-label--rich {
   top: 6px;
   transform: translateX(-50%);
-  white-space: normal;
-  padding: 4px 8px;
-  max-width: 90%;
+  padding: 4px 6px;
+  max-width: 80%;
 }
 .u-col-header-label__title {
   font-weight: 600;
 }
 .u-col-header-label__date-range {
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   margin-top: 0.15rem;
   font-style: normal;
   opacity: 0.8;
   letter-spacing: 0.05em;
 }
 .u-col-header-label__description {
-  font-size: 0.575rem;
+  font-size: 0.635rem;
   margin-top: 0.15rem;
   font-style: normal;
   font-weight: 400;
