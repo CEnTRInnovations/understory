@@ -1820,9 +1820,14 @@ const ComplexityTimeline = () => {
     return `${italic ? 'italic ' : ''}${weight ? weight + ' ' : ''}${size}px "Alegreya Sans", sans-serif`;
   }
 
-  function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0) {
+  // Extra pixels added to the LEFT of the export canvas to give layer labels
+  // their own column. The ctx is translated right by this amount before
+  // drawCardsMode is called, so negative x values reach back into the sidebar.
+  const EXPORT_SIDEBAR_EXTRA = 80;
+
+  function drawCardsMode(ctx: CanvasRenderingContext2D, w: number, h: number, _span: number, fontScale = 1.0, sidebarExtra = 0) {
     ctx.fillStyle = BG_COLOR;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(-sidebarExtra, 0, w + sidebarExtra, h);
     // Connections — longest first so wide connections sit underneath local ones at crossings.
     // Halo then visible per connection creates the under-bridge gap via painter's algorithm.
     const cardRenderOrder = [...connections.keys()].sort((a, b) => {
@@ -1922,43 +1927,43 @@ const ComplexityTimeline = () => {
       }
     });
 
-    // Layer dividers + backgrounds + labels/icons/descriptions
+    // Layer dividers + backgrounds (span full canvas width including sidebar)
     layers.forEach((layer, i) => {
       const y = topReserveH + layerTops[i];
       const lh = effectiveHeights[i];
       if (layer.color) {
         ctx.fillStyle = `${layer.color}20`;
-        ctx.fillRect(0, y, w, lh);
+        ctx.fillRect(-sidebarExtra, y, w + sidebarExtra, lh);
       } else if (i % 2 === 1) {
         ctx.fillStyle = 'rgba(62,59,53,0.04)';
-        ctx.fillRect(0, y, w, lh);
+        ctx.fillRect(-sidebarExtra, y, w + sidebarExtra, lh);
       }
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      // Icon
-      let labelX = 10;
-      if (layer.icon) {
-        ctx.save();
-        ctx.fillStyle = '#6b6760';
-        ctx.font = `${Math.round(12 * fontScale)}px "Material Symbols Outlined"`;
+      ctx.beginPath(); ctx.moveTo(-sidebarExtra, y); ctx.lineTo(w, y); ctx.stroke();
+      // Labels drawn inline only when no separate sidebar column
+      if (sidebarExtra === 0) {
+        let labelX = 10;
+        if (layer.icon) {
+          ctx.save();
+          ctx.fillStyle = '#6b6760';
+          ctx.font = `${Math.round(12 * fontScale)}px "Material Symbols Outlined"`;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+          ctx.fillText(layer.icon, 10, y + 14);
+          labelX = 26;
+          ctx.restore();
+        }
+        const maxLabelW = EVENT_EDGE_PADDING - labelX - 4;
+        ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-        ctx.fillText(layer.icon, 10, y + 14);
-        labelX = 26;
-        ctx.restore();
-      }
-      // Label (word-wrapped)
-      const maxLabelW = EVENT_EDGE_PADDING - labelX - 4;
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      const labelLines = wrapCanvasText(ctx, layer.label, maxLabelW);
-      labelLines.forEach((line, li) => ctx.fillText(line, labelX, y + 14 + li * 12));
-      // Description (word-wrapped, smaller)
-      const desc = layerDescriptions[i] ?? '';
-      if (desc) {
-        ctx.font = scaledFont(9, fontScale);
-        ctx.fillStyle = '#8A867E';
-        const descLines = wrapCanvasText(ctx, desc, EVENT_EDGE_PADDING - 14);
-        descLines.forEach((line, li) => ctx.fillText(line, 10, y + 14 + labelLines.length * 12 + 2 + li * 11));
+        const labelLines = wrapCanvasText(ctx, layer.label, maxLabelW);
+        labelLines.forEach((line, li) => ctx.fillText(line, labelX, y + 14 + li * 12));
+        const desc = layerDescriptions[i] ?? '';
+        if (desc) {
+          ctx.font = scaledFont(9, fontScale);
+          ctx.fillStyle = '#8A867E';
+          const descLines = wrapCanvasText(ctx, desc, EVENT_EDGE_PADDING - 14);
+          descLines.forEach((line, li) => ctx.fillText(line, 10, y + 14 + labelLines.length * 12 + 2 + li * 11));
+        }
       }
     });
 
@@ -1984,9 +1989,9 @@ const ComplexityTimeline = () => {
       ctx.textBaseline = 'alphabetic';
     });
 
-    // Separator rule
+    // Separator rule (spans full canvas including sidebar)
     ctx.save(); ctx.strokeStyle = 'rgba(62,59,53,0.18)'; ctx.lineWidth = 0.5;
-    ctx.beginPath(); ctx.moveTo(0, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-sidebarExtra, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
     ctx.restore();
 
     // Events (cards and anchors)
@@ -2047,6 +2052,63 @@ const ComplexityTimeline = () => {
       }
     });
 
+    // Sidebar overlay — painted AFTER events so labels always appear on top.
+    // Uses an opaque bg repaint to erase any event overflow into the label column.
+    if (sidebarExtra > 0) {
+      const sidebarW = sidebarExtra + EVENT_EDGE_PADDING; // total sidebar width in drawCardsMode coords
+      layers.forEach((layer, i) => {
+        const y = topReserveH + layerTops[i];
+        const lh = effectiveHeights[i];
+        // Erase event overflow
+        ctx.fillStyle = BG_COLOR;
+        ctx.fillRect(-sidebarExtra, y, sidebarW, lh);
+        // Reapply band color
+        if (layer.color) {
+          ctx.fillStyle = `${layer.color}20`;
+          ctx.fillRect(-sidebarExtra, y, sidebarW, lh);
+        } else if (i % 2 === 1) {
+          ctx.fillStyle = 'rgba(62,59,53,0.04)';
+          ctx.fillRect(-sidebarExtra, y, sidebarW, lh);
+        }
+        // Divider in sidebar
+        ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-sidebarExtra, y); ctx.lineTo(0, y); ctx.stroke();
+        // Icon
+        let labelX = -sidebarExtra + 10;
+        if (layer.icon) {
+          ctx.save();
+          ctx.fillStyle = '#6b6760';
+          ctx.font = `${Math.round(12 * fontScale)}px "Material Symbols Outlined"`;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+          ctx.fillText(layer.icon, labelX, y + 14);
+          ctx.restore();
+          labelX += 16;
+        }
+        // Label (word-wrapped to full sidebar width)
+        const maxLabelW = sidebarW - (labelX + sidebarExtra) - 4;
+        ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        const labelLines = wrapCanvasText(ctx, layer.label, maxLabelW);
+        labelLines.forEach((line, li) => ctx.fillText(line, labelX, y + 14 + li * 12));
+        // Description
+        const desc = layerDescriptions[i] ?? '';
+        if (desc) {
+          ctx.font = scaledFont(9, fontScale);
+          ctx.fillStyle = '#8A867E';
+          const descLines = wrapCanvasText(ctx, desc, sidebarW - 20);
+          descLines.forEach((line, li) => ctx.fillText(line, -sidebarExtra + 10, y + 14 + labelLines.length * 12 + 2 + li * 11));
+        }
+      });
+      // Erase top (column header) area in sidebar
+      ctx.fillStyle = BG_COLOR;
+      ctx.fillRect(-sidebarExtra, 0, sidebarW, topReserveH);
+      // Vertical separator at the content-area boundary
+      ctx.save();
+      ctx.strokeStyle = 'rgba(62,59,53,0.22)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(EVENT_EDGE_PADDING, 0); ctx.lineTo(EVENT_EDGE_PADDING, h); ctx.stroke();
+      ctx.restore();
+    }
+
     // Year axis
     const axY  = h - 48;
     ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
@@ -2085,19 +2147,21 @@ const ComplexityTimeline = () => {
 
     if (profile.id === 'native' || profile.ratio === 0) {
       const scale = Math.round(300 / 96); // ≈ 3× for 300dpi
-      canvas.width  = rect.width  * scale;
+      canvas.width  = (rect.width + EXPORT_SIDEBAR_EXTRA) * scale;
       canvas.height = rect.height * scale;
       const ctx = canvas.getContext('2d')!;
       ctx.scale(scale, scale);
+      ctx.translate(EXPORT_SIDEBAR_EXTRA, 0);
       const span = endYear - startYear;
-      drawCardsMode(ctx, rect.width, rect.height, span, profile.fontScale);
+      drawCardsMode(ctx, rect.width, rect.height, span, profile.fontScale, EXPORT_SIDEBAR_EXTRA);
     } else {
       targetW = profile.pxWidth;
       targetH = Math.round(profile.pxWidth / profile.ratio);
       canvas.width  = targetW;
       canvas.height = targetH;
 
-      const naturalW = rect.width;
+      // Include sidebar extra in the natural width so letterboxing accounts for it
+      const naturalW = rect.width + EXPORT_SIDEBAR_EXTRA;
       const naturalH = rect.height;
       const scaleToFitW = targetW / naturalW;
       const scaleToFitH = targetH / naturalH;
@@ -2112,11 +2176,12 @@ const ComplexityTimeline = () => {
       ctx.fillRect(0, 0, targetW, targetH);
       ctx.translate(offsetX, offsetY);
       ctx.scale(contentScale, contentScale);
+      ctx.translate(EXPORT_SIDEBAR_EXTRA, 0);
 
-      const drawW = naturalW;
+      const drawW = rect.width;
       const drawH = naturalH;
       const span  = endYear - startYear;
-      drawCardsMode(ctx, drawW, drawH, span, profile.fontScale);
+      drawCardsMode(ctx, drawW, drawH, span, profile.fontScale, EXPORT_SIDEBAR_EXTRA);
     }
 
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
