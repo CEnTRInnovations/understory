@@ -2035,11 +2035,14 @@ const ComplexityTimeline = () => {
           <button className="u-btn u-btn--cut" onClick={() => { setEditingCut(null); setShowCutModal(true); }}>
             <Scissors size={13} /> Add Cut
           </button>
-        </>) : (
+        </>) : (<>
+          <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
+            <Columns size={13} /> Add Era
+          </button>
           <button className="u-btn u-btn--column" onClick={() => setShowTopicalEventModal({})}>
             <Plus size={13} /> Add Event
           </button>
-        )}
+        </>)}
 
         <div className="u-toolbar-sep" />
         <button
