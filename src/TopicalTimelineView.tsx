@@ -34,11 +34,13 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
         className={`u-topical-root${printMode ? ' u-topical-root--print' : ''}`}
         style={{ gridTemplateColumns: `repeat(${sorted.length}, 1fr)` }}
       >
-        {/* Document header */}
-        <div className="u-topical-header" style={{ gridColumn: `1 / ${sorted.length + 1}` }}>
-          <h1 className="u-topical-title">{title}</h1>
-          {subtitle && <p className="u-topical-subtitle">{subtitle}</p>}
-        </div>
+        {/* Document header — omitted when both title and subtitle are empty */}
+        {(title || subtitle) && (
+          <div className="u-topical-header" style={{ gridColumn: `1 / ${sorted.length + 1}` }}>
+            <h1 className="u-topical-title">{title}</h1>
+            {subtitle && <p className="u-topical-subtitle">{subtitle}</p>}
+          </div>
+        )}
 
         {/* Era columns */}
         {sorted.map((era) => {
