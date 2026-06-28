@@ -1700,7 +1700,7 @@ const ComplexityTimeline = () => {
         setLayerDescriptions(Array.isArray(data.layerDescriptions)
           ? data.layerDescriptions
           : (data.layers ?? []).map(() => ''));
-        setLayerHeights(Array.isArray(data.layerHeights) ? data.layerHeights : []);
+        setLayerHeights([]);  // always recalculate uniform heights for current canvas/profile
         setStartYear(typeof data.startYear === 'number' ? data.startYear : 2008);
         setEndYear(typeof data.endYear === 'number' ? data.endYear : 2025);
         const rawEvents: TimelineEvent[] = Array.isArray(data.events)
