@@ -1784,14 +1784,25 @@ const ComplexityTimeline = () => {
         // using the file's year range so the layout matches what the user expects.
         const loadedCols: Column[] = Array.isArray(data.columns) ? data.columns : [];
         if (loadedCols.length > 0) {
-          const ls = typeof data.startYear === 'number' ? data.startYear : 2008;
-          const le = typeof data.endYear   === 'number' ? data.endYear   : 2025;
-          const n = loadedCols.length, span = le - ls;
-          setColumns(loadedCols.map((col, i) => ({
-            ...col,
-            startYear: i === 0     ? ls : Math.round(ls + (i * span) / n),
-            endYear:   i === n - 1 ? le : Math.round(ls + ((i + 1) * span) / n),
-          })));
+          // Only redistribute if columns are missing year boundaries (backward compat
+          // with old .und files that pre-date the startYear/endYear fields).
+          // Saved files with explicit ranges must keep those ranges so per-column
+          // tick marks and event positions reflect the intended historical periods.
+          const needsRedistribute = loadedCols.some(
+            c => typeof c.startYear !== 'number' || typeof c.endYear !== 'number'
+          );
+          if (needsRedistribute) {
+            const ls = typeof data.startYear === 'number' ? data.startYear : 2008;
+            const le = typeof data.endYear   === 'number' ? data.endYear   : 2025;
+            const n = loadedCols.length, span = le - ls;
+            setColumns(loadedCols.map((col, i) => ({
+              ...col,
+              startYear: i === 0     ? ls : Math.round(ls + (i * span) / n),
+              endYear:   i === n - 1 ? le : Math.round(ls + ((i + 1) * span) / n),
+            })));
+          } else {
+            setColumns(loadedCols);
+          }
         } else {
           setColumns([]);
         }
@@ -1996,7 +2007,12 @@ const ComplexityTimeline = () => {
     ctx.beginPath(); ctx.moveTo(-sidebarExtra, topReserveH); ctx.lineTo(w, topReserveH); ctx.stroke();
     ctx.restore();
 
-    // Events (cards and anchors)
+    // Events (cards and anchors) — clipped to the content area so cards never
+    // bleed into the sidebar column on the left.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(EVENT_EDGE_PADDING, 0, w, h);
+    ctx.clip();
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
       const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
@@ -2053,9 +2069,9 @@ const ComplexityTimeline = () => {
         ctx.textBaseline = 'alphabetic';
       }
     });
+    ctx.restore(); // end content-area clip
 
     // Sidebar overlay — painted AFTER events so labels always appear on top.
-    // Uses an opaque bg repaint to erase any event overflow into the label column.
     if (sidebarExtra > 0) {
       const sidebarW = sidebarExtra + EVENT_EDGE_PADDING; // total sidebar width in drawCardsMode coords
       layers.forEach((layer, i) => {
