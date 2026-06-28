@@ -18,6 +18,7 @@ const LOGO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAHgAAAB2CAYAAAADbleiAAAKOmlDQ1BzUkdCIE
 type TimelineEvent = {
   label: string;
   year: number;
+  dateLabel?: string; // free-form display date (e.g. "Spring 1968"); overrides year in all views
   layer: number;
   x: number;
   yOffset: number; // px from top of the layer band — lets events be repositioned vertically within a layer
@@ -463,6 +464,7 @@ const EventModal = ({
   const eventType = initialData?.type ?? 'state';
   const isNew = !initialData?.label;
   const [label, setLabel]         = useState(initialData?.label       ?? '');
+  const [dateLabel, setDateLabel] = useState(initialData?.dateLabel   ?? '');
   const [year, setYear]           = useState(initialData?.year        ?? midYear);
   const [eventEndYear, setEventEndYear] = useState<string>(
     initialData?.endYear !== undefined ? String(initialData.endYear) : ''
@@ -500,7 +502,7 @@ const EventModal = ({
     // Preserve an existing resize-width only when no endYear is active
     const width = parsedEndYear !== undefined ? undefined : initialData?.width;
     onSave(
-      { label: label.trim(), year, endYear: parsedEndYear, layer, x, yOffset, color, borderColor, style, type: eventType, width, xOffsetPct: initialData?.xOffsetPct },
+      { label: label.trim(), year, dateLabel: dateLabel.trim() || undefined, endYear: parsedEndYear, layer, x, yOffset, color, borderColor, style, type: eventType, width, xOffsetPct: initialData?.xOffsetPct },
       eventType === 'anchor' && isNew && linkedStateIdx !== null ? linkedStateIdx : undefined,
     );
   };
@@ -525,6 +527,13 @@ const EventModal = ({
           <input className="u-form-input" type="number" value={year} min={startYear} max={endYear}
             onChange={e => setYear(Number(e.target.value))} />
         </div>
+        <div className="u-form-group">
+          <label className="u-form-label">Date label <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
+          <input className="u-form-input" type="text" placeholder={`e.g. "Spring ${year}"`}
+            value={dateLabel} onChange={e => setDateLabel(e.target.value)} />
+        </div>
+      </div>
+      <div className="u-form-row">
         {isState ? (
           <div className="u-form-group">
             <label className="u-form-label">End Year <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
@@ -1936,7 +1945,7 @@ const ComplexityTimeline = () => {
         ctx.font = scaledFont(9, fontScale, '700', false);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText(String(ev.year), textX, y);
+        ctx.fillText(ev.dateLabel ?? String(ev.year), textX, y);
         ctx.restore();
         // Label
         ctx.save();
@@ -2537,7 +2546,7 @@ const ComplexityTimeline = () => {
                       >
                         <div className="u-event-anchor__dot" style={{ background: event.color }} />
                         <div className="u-event-anchor__text">
-                          <div className="u-event-anchor__year" style={{ color: event.color }}>{event.year}</div>
+                          <div className="u-event-anchor__year" style={{ color: event.color }}>{event.dateLabel ?? event.year}</div>
                           <div className={`u-event-anchor__label${event.style === 'italic' ? ' u-event-anchor__label--italic' : ''}`} style={{ color: event.color }}>
                             {event.label}
                           </div>
