@@ -73,7 +73,6 @@ export const ICON_PALETTE: Array<{ name: string; Component: IconComponent }> = [
   { name: 'Sparkle',                 Component: Sparkle },
 ];
 
-const ICON_MAP = Object.fromEntries(ICON_PALETTE.map(({ name, Component }) => [name, Component]));
 
 
 export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineViewProps>(
@@ -118,7 +117,7 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
               {/* Event list */}
               <ul className="u-topical-event-list">
                 {eraAnchors.map((anchor) => {
-                  const IconComponent = anchor.icon ? ICON_MAP[anchor.icon] : null;
+                  const IconComponent = ICON_PALETTE.find(p => p.name === anchor.icon)?.Component ?? null;
                   return (
                     <li key={`${anchor.year}-${anchor.label}`} className="u-topical-event">
                       <span className="u-topical-event-icon" style={{ color: eraColor }}>
