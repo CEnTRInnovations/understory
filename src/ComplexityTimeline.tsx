@@ -1018,16 +1018,18 @@ const ComplexityTimeline = () => {
   connectionsRef.current = connections;
 
   const trendRegisterH = Math.max(TREND_REGISTER_H, trends.length * TREND_SLOT_H + 4);
-  // Expand column header area when any column carries extra text content.
-  // Estimates description wrap lines at ~35 chars/line (conservative for 9px canvas font).
-  const maxDescLines = columns.reduce((max, c) => {
+  // Expand column header area to fit title wrapping + optional date range + description.
+  // ~18 chars/line for small-caps uppercase title; ~35 for description prose.
+  const maxTitleLines = columns.reduce((max, c) => Math.max(max, Math.ceil(c.label.length / 18)), 0);
+  const maxDescLines  = columns.reduce((max, c) => {
     if (!c.description) return max;
     const lines = c.description.split('\n').reduce((n, l) => n + Math.ceil((l.length || 1) / 35), 0);
     return Math.max(max, lines);
   }, 0);
-  const colHeaderH = columns.some(c => c.dateRange || c.description)
-    ? Math.max(68, 26 + maxDescLines * 11 + 4)
-    : COLUMN_HEADER_H;
+  const dateRowH  = columns.some(c => c.dateRange) ? 14 : 0;
+  const colHeaderH = columns.length === 0
+    ? COLUMN_HEADER_H
+    : Math.max(COLUMN_HEADER_H, 10 + maxTitleLines * 13 + dateRowH + maxDescLines * 11 + 6);
   const topReserveH = colHeaderH + trendRegisterH;
 
   const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
@@ -1168,7 +1170,7 @@ const ComplexityTimeline = () => {
     } else {
       setLayers(l => [...l, { label: name, icon }]);
       setLayerDescriptions(d => [...d, description]);
-      setLayerHeights(h => [...h, uniformLayerH]);
+      setLayerHeights([]);  // reset to uniform distribution for new layer count
     }
     setShowLayerModal(false);
   };
@@ -1188,7 +1190,7 @@ const ComplexityTimeline = () => {
       .map(c => ({ ...c, from: indexMap.get(c.from)!, to: indexMap.get(c.to)! })));
     setLayers(l => l.filter((_, idx) => idx !== i));
     setLayerDescriptions(d => d.filter((_, idx) => idx !== i));
-    setLayerHeights(h => h.filter((_, idx) => idx !== i));
+    setLayerHeights([]);  // reset to uniform distribution for new layer count
     setSelectedEvent(null);
     setSelectedConnection(null);
     if (editingLayer === i) { setEditingLayer(null); setShowLayerModal(false); }

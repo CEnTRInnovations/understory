@@ -512,10 +512,7 @@ body.u-dragging-layer {
   text-transform: uppercase;
   color: var(--text-muted);
   white-space: nowrap;
-  background: var(--bg-main);
   padding: 1px 6px;
-  border-radius: 2px;
-  border: 1px solid var(--border);
   pointer-events: auto;
   cursor: pointer;
   text-align: center;
@@ -549,7 +546,6 @@ body.u-dragging-layer {
   opacity: 0.85;
 }
 .u-col-header-label:hover {
-  border-color: var(--btn-column);
   color: var(--btn-column);
 }
 .u-content-separator {
