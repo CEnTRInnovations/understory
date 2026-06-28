@@ -49,6 +49,7 @@ type Connection = {
 
 const DEFAULT_ARROW_SIZE = 8;
 
+type Layer  = { label: string; icon?: string };
 type Column = { label: string; startYear: number; endYear: number; dateRange?: string; description?: string; color?: string };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
@@ -394,7 +395,7 @@ const EventModal = ({
 }: {
   onClose: () => void;
   onSave: (data: TimelineEvent, linkedStateIdx?: number) => void;
-  layers: string[];
+  layers: Layer[];
   startYear: number;
   endYear: number;
   yearToPct: (year: number) => number;
@@ -479,7 +480,7 @@ const EventModal = ({
           <div className="u-form-group">
             <label className="u-form-label">Layer</label>
             <select className="u-form-select" value={layer} onChange={e => handleLayerChange(Number(e.target.value))}>
-              {layers.map((l, i) => <option key={i} value={i}>{l}</option>)}
+              {layers.map((l, i) => <option key={i} value={i}>{l.label}</option>)}
             </select>
           </div>
         )}
@@ -489,7 +490,7 @@ const EventModal = ({
           <div className="u-form-group">
             <label className="u-form-label">Layer</label>
             <select className="u-form-select" value={layer} onChange={e => handleLayerChange(Number(e.target.value))}>
-              {layers.map((l, i) => <option key={i} value={i}>{l}</option>)}
+              {layers.map((l, i) => <option key={i} value={i}>{l.label}</option>)}
             </select>
           </div>
         </div>
@@ -827,7 +828,7 @@ const CutModal = ({
 
 // ── Main Component ──
 const ComplexityTimeline = () => {
-  const [layers, setLayers]                     = useState<string[]>([]);
+  const [layers, setLayers]                     = useState<Layer[]>([]);
   const [layerDescriptions, setLayerDescriptions] = useState<string[]>([]);
   const [layerHeights, setLayerHeights]           = useState<number[]>([]);
   const [resizingLayer, setResizingLayer] = useState<number | null>(null);
@@ -1037,13 +1038,13 @@ const ComplexityTimeline = () => {
   }, []);
 
   // ── Layer ops ──
-  const saveLayer = (name: string, description: string) => {
+  const saveLayer = (name: string, description: string, icon?: string) => {
     if (editingLayer !== null) {
-      setLayers(l => l.map((lyr, i) => i === editingLayer ? name : lyr));
+      setLayers(l => l.map((lyr, i) => i === editingLayer ? { label: name, icon } : lyr));
       setLayerDescriptions(d => d.map((desc, i) => i === editingLayer ? description : desc));
       setEditingLayer(null);
     } else {
-      setLayers(l => [...l, name]);
+      setLayers(l => [...l, { label: name, icon }]);
       setLayerDescriptions(d => [...d, description]);
       setLayerHeights(h => [...h, uniformLayerH]);
     }
@@ -1517,7 +1518,7 @@ const ComplexityTimeline = () => {
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
   // reason about older files (e.g. ones missing selectedProfileId).
-  const TIMELINE_FILE_VERSION = 3;
+  const TIMELINE_FILE_VERSION = 4;
 
   const exportJSON = () => {
     const data = {
@@ -1547,7 +1548,9 @@ const ComplexityTimeline = () => {
           alert('This file doesn\'t look like an Understory timeline export.');
           return;
         }
-        setLayers(data.layers ?? []);
+        setLayers((data.layers ?? []).map((l: any) =>
+          typeof l === 'string' ? { label: l } : l
+        ));
         setLayerDescriptions(Array.isArray(data.layerDescriptions)
           ? data.layerDescriptions
           : (data.layers ?? []).map(() => ''));
@@ -1679,7 +1682,7 @@ const ComplexityTimeline = () => {
     });
 
     // Layer dividers + subtle alternating backgrounds + labels
-    layers.forEach((lyr, i) => {
+    layers.forEach((layer, i) => {
       const y = topReserveH + layerTops[i];
       const lh = effectiveHeights[i];
       if (i % 2 === 1) {
@@ -1689,7 +1692,7 @@ const ComplexityTimeline = () => {
       ctx.strokeStyle = 'rgba(62,59,53,0.14)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale, '500');
-      ctx.textAlign = 'left'; ctx.fillText(lyr, 10, y + 14);
+      ctx.textAlign = 'left'; ctx.fillText(layer.label, 10, y + 14);
     });
 
     // Cuts
@@ -2041,7 +2044,7 @@ const ComplexityTimeline = () => {
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
                       title="Click to rename this layer">
-                      {layer}
+                      {layer.label}
                     </span>
                     <button className="u-layer-edit"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
@@ -2492,7 +2495,7 @@ const ComplexityTimeline = () => {
           onClose={() => { setShowLayerModal(false); setEditingLayer(null); }}
           onSave={saveLayer}
           initialData={editingLayer !== null
-            ? { name: layers[editingLayer], description: layerDescriptions[editingLayer] ?? '' }
+            ? { name: layers[editingLayer].label, description: layerDescriptions[editingLayer] ?? '' }
             : undefined}
         />
       )}
