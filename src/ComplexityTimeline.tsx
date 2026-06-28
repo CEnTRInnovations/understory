@@ -23,6 +23,7 @@ type TimelineEvent = {
   width?: number;    // states only; px; undefined = auto-size to content
   endYear?: number;  // states only; when set alongside year (startYear), defines the span
   xOffsetPct?: number; // anchors only: signed offset from parent state's x (% units)
+  icon?: string;        // anchors only: Phosphor icon name for topical timeline view
 };
 
 type Connection = {
@@ -44,7 +45,7 @@ type Connection = {
 
 const DEFAULT_ARROW_SIZE = 8;
 
-type Column = { label: string; startYear: number; endYear: number; dateRange?: string; description?: string };
+type Column = { label: string; startYear: number; endYear: number; dateRange?: string; description?: string; color?: string };
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
 
@@ -530,6 +531,7 @@ const ColumnModal = ({
   const [colEnd, setColEnd]         = useState(initialData?.endYear ?? endYear);
   const [dateRange, setDateRange]   = useState(initialData?.dateRange ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
+  const [color, setColor]             = useState(initialData?.color ?? '#D2BDA3');
   const isEditing = !!initialData;
 
   return (
@@ -555,13 +557,19 @@ const ColumnModal = ({
           value={dateRange} onChange={e => setDateRange(e.target.value)} />
       </div>
       <div className="u-form-group">
-        <label className="u-form-label">Description (optional)</label>
-        <input className="u-form-input" type="text" placeholder="Brief description of this period"
-          value={description} onChange={e => setDescription(e.target.value)} />
+        <label className="u-form-label">Main institutional shift <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
+        <textarea className="u-form-input u-form-textarea" placeholder="Describe the key shift that defines this era…"
+          value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+      </div>
+      <div className="u-form-group">
+        <label className="u-form-label">Era color</label>
+        <input className="u-form-color" type="color" value={color} onChange={e => setColor(e.target.value)} />
       </div>
       <button className="u-btn u-btn--column u-btn--full" onClick={() => label.trim() && onSave({
         label: label.trim(), startYear: colStart, endYear: colEnd,
-        dateRange: dateRange.trim() || undefined, description: description.trim() || undefined,
+        dateRange: dateRange.trim() || undefined,
+        description: description.trim() || undefined,
+        color: color || undefined,
       })} disabled={!label.trim()}>
         {isEditing ? 'Save Column' : 'Add Column'}
       </button>
