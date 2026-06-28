@@ -1150,6 +1150,11 @@ const ComplexityTimeline = () => {
   useLayoutEffect(() => { forceReflow(); }, [containerWidth]);
   useLayoutEffect(() => { forceReflow(); }, [events.length]);
 
+  // When the export size profile changes, redistribute layer heights uniformly
+  // for the new aspect ratio (clearing the array makes effectiveHeights fall
+  // through to the freshly-computed uniformLayerH for the new profile).
+  useEffect(() => { setLayerHeights([]); }, [selectedProfileId]);
+
   // ── ResizeObserver: track the canvas area's actual pixel width ──
   useEffect(() => {
     const el = canvasAreaRef.current;
