@@ -6,7 +6,7 @@ import { syncAnchorPositions } from './utils/anchorPositioning';
 import './understory.css';
 import html2canvas from 'html2canvas';
 import { TopicalTimelineView } from './TopicalTimelineView';
-import { ICON_PALETTE } from './utils/iconPalette';
+import { ICON_PALETTE, ICON_CATEGORIES } from './utils/iconPalette';
 import type { TopicalEvent } from './utils/topicalTimeline';
 
 // ── Logo (transparent background baked in) ──
@@ -393,12 +393,19 @@ const LayerModal = ({
             onClick={() => setIcon(undefined)} title="None">
             <span style={{ fontSize: '0.7rem', color: '#6B625A' }}>–</span>
           </button>
-          {ICON_PALETTE.map(({ name: iconName, Component }) => (
-            <button key={iconName} type="button"
-              className={`u-icon-picker-item${icon === iconName ? ' u-icon-picker-item--selected' : ''}`}
-              onClick={() => setIcon(iconName)} title={iconName}>
-              <Component weight="bold" size={16} />
-            </button>
+          {ICON_CATEGORIES.map(cat => (
+            <div key={cat} className="u-icon-picker-group">
+              <div className="u-icon-picker-category">{cat}</div>
+              <div className="u-icon-picker-row">
+                {ICON_PALETTE.filter(i => i.category === cat).map(({ name: iconName }) => (
+                  <button key={iconName} type="button"
+                    className={`u-icon-picker-item${icon === iconName ? ' u-icon-picker-item--selected' : ''}`}
+                    onClick={() => setIcon(iconName)} title={iconName}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{iconName}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -650,12 +657,19 @@ const TopicalEventModal = ({
             onClick={() => setIcon(undefined)} title="None">
             <span style={{ fontSize: '0.7rem', color: '#6B625A' }}>–</span>
           </button>
-          {ICON_PALETTE.map(({ name: iconName, Component }) => (
-            <button key={iconName} type="button"
-              className={`u-icon-picker-item${icon === iconName ? ' u-icon-picker-item--selected' : ''}`}
-              onClick={() => setIcon(iconName)} title={iconName}>
-              <Component size={16} />
-            </button>
+          {ICON_CATEGORIES.map(cat => (
+            <div key={cat} className="u-icon-picker-group">
+              <div className="u-icon-picker-category">{cat}</div>
+              <div className="u-icon-picker-row">
+                {ICON_PALETTE.filter(i => i.category === cat).map(({ name: iconName }) => (
+                  <button key={iconName} type="button"
+                    className={`u-icon-picker-item${icon === iconName ? ' u-icon-picker-item--selected' : ''}`}
+                    onClick={() => setIcon(iconName)} title={iconName}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{iconName}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -2128,10 +2142,9 @@ const ComplexityTimeline = () => {
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
                       title="Click to rename this layer">
                       {(() => {
-                        const LayerIcon = layer.icon
-                          ? ICON_PALETTE.find(p => p.name === layer.icon)?.Component
+                        return layer.icon
+                          ? <span className="material-symbols-outlined material-symbols-filled" style={{ fontSize: 12, marginRight: 4, flexShrink: 0, lineHeight: 1 }}>{layer.icon}</span>
                           : null;
-                        return LayerIcon ? <LayerIcon weight="bold" size={12} style={{ marginRight: 4, flexShrink: 0 }} /> : null;
                       })()}
                       {layer.label}
                     </span>

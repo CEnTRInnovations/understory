@@ -1,5 +1,4 @@
 import { forwardRef } from 'react';
-import { ICON_PALETTE } from './utils/iconPalette';
 import { getEventsForEra, formatEraRange } from './utils/topicalTimeline';
 import type { TopicalEvent } from './utils/topicalTimeline';
 
@@ -21,8 +20,6 @@ export type TopicalTimelineViewProps = {
   onAddEvent?: (era: Column) => void;
   onEditEvent?: (event: TopicalEvent, index: number) => void;
 };
-
-export { ICON_PALETTE };
 
 export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineViewProps>(
   ({ title, subtitle, eras, events, printMode = false, onAddEvent, onEditEvent }, ref) => {
@@ -68,7 +65,6 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
               {/* Event list */}
               <ul className="u-topical-event-list">
                 {eraEvents.map((event, i) => {
-                  const IconComponent = ICON_PALETTE.find(p => p.name === event.icon)?.Component ?? null;
                   return (
                     <li
                       key={`${i}-${event.year}`}
@@ -76,8 +72,8 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
                       onClick={() => onEditEvent?.(event, events.indexOf(event))}
                     >
                       <span className="u-topical-event-icon" style={{ color: eraColor }}>
-                        {IconComponent
-                          ? <IconComponent size={18} color={eraColor} />
+                        {event.icon
+                          ? <span className="material-symbols-outlined" style={{ fontSize: 18, color: eraColor, lineHeight: 1 }}>{event.icon}</span>
                           : <span className="u-topical-event-dot" style={{ background: eraColor }} />
                         }
                       </span>

@@ -1206,11 +1206,51 @@ body.u-dragging-layer {
 
 /* ── Icon picker (EventModal) ────────────────────────────── */
 
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+.material-symbols-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
 .u-icon-picker {
+  padding: 6px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.u-icon-picker-group {
+  margin-bottom: 8px;
+}
+
+.u-icon-picker-category {
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8B7E75;
+  margin-bottom: 4px;
+}
+
+.u-icon-picker-row {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 6px 0;
 }
 
 .u-icon-picker-item {
