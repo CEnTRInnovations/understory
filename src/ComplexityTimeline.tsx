@@ -352,12 +352,14 @@ const LayerModal = ({
   onClose, onSave, initialData
 }: {
   onClose: () => void;
-  onSave: (name: string, description: string) => void;
-  initialData?: { name: string; description: string };
+  onSave: (name: string, description: string, icon?: string) => void;
+  initialData?: { name: string; description: string; icon?: string };
 }) => {
   const [name, setName] = useState(initialData?.name ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
+  const [icon, setIcon] = useState<string | undefined>(initialData?.icon);
   const isEditing = initialData !== undefined;
+  const handleSave = () => { if (name.trim()) onSave(name.trim(), description.trim(), icon); };
   return (
     <Modal onClose={onClose} title={isEditing ? 'Edit Layer' : 'Add Layer'}>
       <div className="u-form-group">
@@ -368,7 +370,7 @@ const LayerModal = ({
           placeholder="e.g. Policy, Community, Institutional"
           value={name}
           onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave(name.trim(), description.trim()); }}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
           autoFocus
         />
       </div>
@@ -380,10 +382,27 @@ const LayerModal = ({
           placeholder="Brief description of this layer"
           value={description}
           onChange={e => setDescription(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave(name.trim(), description.trim()); }}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
         />
       </div>
-      <button className="u-btn u-btn--layer u-btn--full" onClick={() => name.trim() && onSave(name.trim(), description.trim())}>
+      <div className="u-form-group">
+        <label className="u-form-label">Icon <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></label>
+        <div className="u-icon-picker">
+          <button type="button"
+            className={`u-icon-picker-item${!icon ? ' u-icon-picker-item--selected' : ''}`}
+            onClick={() => setIcon(undefined)} title="None">
+            <span style={{ fontSize: '0.7rem', color: '#6B625A' }}>–</span>
+          </button>
+          {ICON_PALETTE.map(({ name: iconName, Component }) => (
+            <button key={iconName} type="button"
+              className={`u-icon-picker-item${icon === iconName ? ' u-icon-picker-item--selected' : ''}`}
+              onClick={() => setIcon(iconName)} title={iconName}>
+              <Component weight="bold" size={16} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <button className="u-btn u-btn--layer u-btn--full" onClick={handleSave} disabled={!name.trim()}>
         {isEditing ? 'Save Layer' : 'Add Layer'}
       </button>
     </Modal>
@@ -2044,6 +2063,12 @@ const ComplexityTimeline = () => {
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
                       title="Click to rename this layer">
+                      {(() => {
+                        const LayerIcon = layer.icon
+                          ? ICON_PALETTE.find(p => p.name === layer.icon)?.Component
+                          : null;
+                        return LayerIcon ? <LayerIcon weight="bold" size={12} style={{ marginRight: 4, flexShrink: 0 }} /> : null;
+                      })()}
                       {layer.label}
                     </span>
                     <button className="u-layer-edit"
@@ -2495,7 +2520,7 @@ const ComplexityTimeline = () => {
           onClose={() => { setShowLayerModal(false); setEditingLayer(null); }}
           onSave={saveLayer}
           initialData={editingLayer !== null
-            ? { name: layers[editingLayer].label, description: layerDescriptions[editingLayer] ?? '' }
+            ? { name: layers[editingLayer].label, description: layerDescriptions[editingLayer] ?? '', icon: layers[editingLayer].icon }
             : undefined}
         />
       )}
