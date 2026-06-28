@@ -2065,14 +2065,14 @@ const ComplexityTimeline = () => {
 
         <div className="u-toolbar-sep" />
         <button
-          className={`u-btn${viewMode === 'process' ? ' u-btn--active' : ''}`}
+          className={`u-btn u-btn--toggle${viewMode === 'process' ? ' u-btn--active' : ''}`}
           onClick={() => setViewMode('process')}
           title="Process view"
         >
           <Layers size={13} /> Process
         </button>
         <button
-          className={`u-btn${viewMode === 'topical' ? ' u-btn--active' : ''}`}
+          className={`u-btn u-btn--toggle${viewMode === 'topical' ? ' u-btn--active' : ''}`}
           onClick={() => setViewMode('topical')}
           title="Topical timeline view"
         >
