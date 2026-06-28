@@ -1,6 +1,6 @@
 type MinimalAnchor = {
   year: number;
-  type: 'state' | 'anchor';
+  type?: 'state' | 'anchor';
 };
 
 type Era = { startYear: number; endYear: number };
@@ -8,7 +8,7 @@ type Era = { startYear: number; endYear: number };
 export function getAnchorsForEra<T extends MinimalAnchor>(anchors: T[], era: Era): T[] {
   return anchors
     .filter(a =>
-      a.type === 'anchor' &&
+      (a.type ?? 'state') === 'anchor' &&
       a.year >= era.startYear &&
       a.year <= era.endYear
     )

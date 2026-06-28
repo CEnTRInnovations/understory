@@ -80,6 +80,8 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
     const currentYear = new Date().getFullYear();
     const sorted = [...eras].sort((a, b) => a.startYear - b.startYear);
 
+    if (sorted.length === 0) return null;
+
     return (
       <div
         ref={ref}
@@ -116,10 +118,10 @@ export const TopicalTimelineView = forwardRef<HTMLDivElement, TopicalTimelineVie
 
               {/* Event list */}
               <ul className="u-topical-event-list">
-                {eraAnchors.map((anchor) => {
+                {eraAnchors.map((anchor, i) => {
                   const IconComponent = ICON_PALETTE.find(p => p.name === anchor.icon)?.Component ?? null;
                   return (
-                    <li key={`${anchor.year}-${anchor.label}`} className="u-topical-event">
+                    <li key={`${i}-${anchor.year}`} className="u-topical-event">
                       <span className="u-topical-event-icon" style={{ color: eraColor }}>
                         {IconComponent
                           ? <IconComponent size={18} color={eraColor} />

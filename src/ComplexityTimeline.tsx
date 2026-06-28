@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors, GripVertical } from 'lucide-react';
 import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
 import { syncAnchorPositions } from './utils/anchorPositioning';
@@ -120,6 +121,16 @@ const CONNECTOR_ELBOW_MAX = 90;
 const ANCHOR_GAP = 5;
 
 const BG_COLOR = '#f4ede2'; // Matches --bg-main; used for connection halo strokes and canvas background
+const TOPICAL_BG = '#F2ECD7'; // Topical view background — matches .u-topical-area in CSS
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function autoSide(center: { x: number; y: number }, other: { x: number; y: number }): Side {
   const dx = other.x - center.x;
@@ -869,6 +880,7 @@ const ComplexityTimeline = () => {
   const [showCutModal, setShowCutModal]           = useState(false);
 
   const [viewMode, setViewMode] = useState<'process' | 'topical'>('process');
+  const [topicalPrintMode, setTopicalPrintMode] = useState(false);
   const topicalViewRef = useRef<HTMLDivElement>(null);
 
   const timelineRef      = useRef<HTMLDivElement>(null);
@@ -884,7 +896,15 @@ const ComplexityTimeline = () => {
 
   const trendRegisterH = Math.max(TREND_REGISTER_H, trends.length * TREND_SLOT_H + 4);
   // Expand column header area when any column carries extra text content.
-  const colHeaderH = columns.some(c => c.dateRange || c.description) ? 68 : COLUMN_HEADER_H;
+  // Estimates description wrap lines at ~35 chars/line (conservative for 9px canvas font).
+  const maxDescLines = columns.reduce((max, c) => {
+    if (!c.description) return max;
+    const lines = c.description.split('\n').reduce((n, l) => n + Math.ceil((l.length || 1) / 35), 0);
+    return Math.max(max, lines);
+  }, 0);
+  const colHeaderH = columns.some(c => c.dateRange || c.description)
+    ? Math.max(68, 26 + maxDescLines * 11 + 4)
+    : COLUMN_HEADER_H;
   const topReserveH = colHeaderH + trendRegisterH;
 
   const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
@@ -1507,11 +1527,7 @@ const ComplexityTimeline = () => {
       layerHeights,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'understory-timeline.und';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadBlob(blob, 'understory-timeline.und');
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1829,36 +1845,28 @@ const ComplexityTimeline = () => {
 
     canvas.toBlob(blob => {
       if (!blob) return;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'understory-timeline.png';
-      a.click();
+      downloadBlob(blob, 'understory-timeline.png');
     }, 'image/png');
   };
 
   const exportTopicalPNG = async () => {
     if (!topicalViewRef.current) return;
-    const el = topicalViewRef.current;
-    // Temporarily enable print mode to remove hover/scroll artifacts
-    el.classList.add('u-topical-root--print');
+    flushSync(() => setTopicalPrintMode(true));
     try {
-      const canvas = await html2canvas(el, {
-        backgroundColor: '#F2ECD7',
+      const canvas = await html2canvas(topicalViewRef.current, {
+        backgroundColor: TOPICAL_BG,
         scale: 2,
         useCORS: true,
         logging: false,
       });
       canvas.toBlob(blob => {
         if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'understory-topical-timeline.png';
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, 'understory-topical-timeline.png');
       }, 'image/png');
+    } catch (err) {
+      console.error('Topical PNG export failed:', err);
     } finally {
-      el.classList.remove('u-topical-root--print');
+      setTopicalPrintMode(false);
     }
   };
 
@@ -2472,6 +2480,7 @@ const ComplexityTimeline = () => {
             subtitle=""
             eras={columns}
             anchors={events}
+            printMode={topicalPrintMode}
           />
         </div>
       )}

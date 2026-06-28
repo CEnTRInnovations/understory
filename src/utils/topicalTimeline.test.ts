@@ -13,6 +13,11 @@ describe('getAnchorsForEra', () => {
     expect(getAnchorsForEra(events, era)).toEqual([]);
   });
 
+  it('excludes events with undefined type (legacy files default to state)', () => {
+    const events = [{ year: 1995, type: undefined }];
+    expect(getAnchorsForEra(events, era)).toEqual([]);
+  });
+
   it('excludes anchors outside the era', () => {
     const events = [
       { year: 1989, type: 'anchor' as const },
