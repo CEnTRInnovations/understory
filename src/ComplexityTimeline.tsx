@@ -2602,6 +2602,8 @@ const ComplexityTimeline = () => {
             eras={columns}
             events={topicalEvents}
             printMode={topicalPrintMode}
+            onAddEvent={era => setShowTopicalEventModal({ eraHint: era })}
+            onEditEvent={(event, index) => setShowTopicalEventModal({ initialData: event, index })}
           />
         </div>
       )}

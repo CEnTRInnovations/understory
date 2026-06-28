@@ -1263,3 +1263,37 @@ body.u-dragging-layer {
 }
 
 /* ── /Form textarea ──────────────────────────────────────── */
+
+/* ── Topical add event button ────────────────────────────── */
+
+.u-topical-add-event {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 4px 8px 8px;
+  padding: 4px 0;
+  background: transparent;
+  border: 1px dashed rgba(62, 59, 53, 0.25);
+  border-radius: 4px;
+  color: rgba(62, 59, 53, 0.45);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.u-topical-add-event:hover {
+  border-color: rgba(62, 59, 53, 0.5);
+  color: rgba(62, 59, 53, 0.7);
+}
+
+/* ── /Topical add event button ───────────────────────────── */
+
+/* ── Topical event card hover ────────────────────────────── */
+
+.u-topical-event--editable {
+  cursor: pointer;
+}
+.u-topical-event--editable:hover {
+  background: rgba(62, 59, 53, 0.06);
+  border-radius: 4px;
+}
+
+/* ── /Topical event card hover ───────────────────────────── */
