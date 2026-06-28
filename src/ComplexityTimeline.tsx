@@ -151,7 +151,10 @@ async function saveWithPicker(blob: Blob, suggestedName: string, mimeType: strin
       if ((e as Error).name === 'AbortError') return;
     }
   }
-  downloadBlob(blob, suggestedName);
+  // Firefox / Safari: prompt for filename since no native save dialog exists
+  const name = window.prompt('File name:', suggestedName);
+  if (name === null) return; // cancelled
+  downloadBlob(blob, name.endsWith(ext) ? name : name + ext);
 }
 
 function autoSide(center: { x: number; y: number }, other: { x: number; y: number }): Side {
