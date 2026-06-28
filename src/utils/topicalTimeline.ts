@@ -1,8 +1,6 @@
 type MinimalAnchor = {
   year: number;
   type: 'state' | 'anchor';
-  importance?: string;
-  visibleLabel?: boolean;
 };
 
 type Era = { startYear: number; endYear: number };
@@ -12,8 +10,7 @@ export function getAnchorsForEra<T extends MinimalAnchor>(anchors: T[], era: Era
     .filter(a =>
       a.type === 'anchor' &&
       a.year >= era.startYear &&
-      a.year <= era.endYear &&
-      (a.importance === 'major' || a.visibleLabel === true)
+      a.year <= era.endYear
     )
     .sort((a, b) => a.year - b.year);
 }

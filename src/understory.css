@@ -1243,3 +1243,23 @@ body.u-dragging-layer {
   overflow: auto;
   background: #F2ECD7;
 }
+
+/* ── View toggle active state ────────────────────────────── */
+
+.u-btn--active {
+  background: rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  font-weight: 600;
+}
+
+/* ── /View toggle active state ───────────────────────────── */
+
+/* ── Form textarea ───────────────────────────────────────── */
+
+.u-form-textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+}
+
+/* ── /Form textarea ──────────────────────────────────────── */

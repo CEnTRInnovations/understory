@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getAnchorsForEra, formatEraRange } from './topicalTimeline';
 
-const baseAnchor = { year: 0, type: 'anchor' as const };
-
 describe('getAnchorsForEra', () => {
   const era = { startYear: 1990, endYear: 2005 };
 
@@ -10,38 +8,36 @@ describe('getAnchorsForEra', () => {
     expect(getAnchorsForEra([], era)).toEqual([]);
   });
 
-  it('excludes non-anchor type events', () => {
-    const events = [{ ...baseAnchor, type: 'state' as const, year: 1995, importance: 'major' }];
+  it('excludes state-type events', () => {
+    const events = [{ year: 1995, type: 'state' as const }];
     expect(getAnchorsForEra(events, era)).toEqual([]);
   });
 
   it('excludes anchors outside the era', () => {
     const events = [
-      { ...baseAnchor, year: 1989, importance: 'major' },
-      { ...baseAnchor, year: 2006, importance: 'major' },
+      { year: 1989, type: 'anchor' as const },
+      { year: 2006, type: 'anchor' as const },
     ];
     expect(getAnchorsForEra(events, era)).toEqual([]);
   });
 
   it('includes anchors at era boundary years', () => {
-    const a1 = { ...baseAnchor, year: 1990, importance: 'major' };
-    const a2 = { ...baseAnchor, year: 2005, importance: 'major' };
+    const a1 = { year: 1990, type: 'anchor' as const };
+    const a2 = { year: 2005, type: 'anchor' as const };
     expect(getAnchorsForEra([a1, a2], era)).toHaveLength(2);
   });
 
-  it('filters to importance===major or visibleLabel===true', () => {
-    const major = { ...baseAnchor, year: 1995, importance: 'major' };
-    const visible = { ...baseAnchor, year: 1996, importance: 'supporting', visibleLabel: true };
-    const minor = { ...baseAnchor, year: 1997, importance: 'supporting' };
-    const result = getAnchorsForEra([major, visible, minor], era);
+  it('includes all anchor-type events in era', () => {
+    const a1 = { year: 1995, type: 'anchor' as const };
+    const a2 = { year: 1997, type: 'anchor' as const };
+    const s  = { year: 1996, type: 'state' as const };
+    const result = getAnchorsForEra([a1, a2, s], era);
     expect(result).toHaveLength(2);
-    expect(result[0]).toBe(major);
-    expect(result[1]).toBe(visible);
   });
 
   it('sorts by year ascending', () => {
-    const a1 = { ...baseAnchor, year: 2000, importance: 'major' };
-    const a2 = { ...baseAnchor, year: 1993, importance: 'major' };
+    const a1 = { year: 2000, type: 'anchor' as const };
+    const a2 = { year: 1993, type: 'anchor' as const };
     const result = getAnchorsForEra([a1, a2], era);
     expect(result[0].year).toBe(1993);
     expect(result[1].year).toBe(2000);

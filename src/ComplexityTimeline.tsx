@@ -1850,10 +1850,12 @@ const ComplexityTimeline = () => {
       });
       canvas.toBlob(blob => {
         if (!blob) return;
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
+        a.href = url;
         a.download = 'understory-topical-timeline.png';
         a.click();
+        URL.revokeObjectURL(url);
       }, 'image/png');
     } finally {
       el.classList.remove('u-topical-root--print');
