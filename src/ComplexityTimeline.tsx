@@ -1167,6 +1167,36 @@ const ComplexityTimeline = () => {
   useLayoutEffect(() => { forceReflow(); }, [containerWidth]);
   useLayoutEffect(() => { forceReflow(); }, [events.length]);
 
+  // When a state card grows taller (text wraps), shift its autoLinked anchors
+  // down by the same delta so they don't overlap the card.
+  useEffect(() => {
+    const observers: ResizeObserver[] = [];
+    events.forEach((ev, i) => {
+      if ((ev.type ?? 'state') !== 'state') return;
+      const el = cardRefs.current[i];
+      if (!el) return;
+      let prevH = el.offsetHeight;
+      const ro = new ResizeObserver(entries => {
+        const newH = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect.height ?? 0;
+        if (!newH || Math.abs(newH - prevH) < 1) return;
+        const delta = newH - prevH;
+        prevH = newH;
+        setEvents(evs => {
+          const linked = connectionsRef.current
+            .filter(c => c.autoLink && c.from === i)
+            .map(c => c.to);
+          if (linked.length === 0) return evs;
+          return evs.map((e, j) =>
+            linked.includes(j) ? { ...e, yOffset: Math.max(0, e.yOffset + delta) } : e
+          );
+        });
+      });
+      ro.observe(el);
+      observers.push(ro);
+    });
+    return () => observers.forEach(ro => ro.disconnect());
+  }, [events.length]); // re-observe whenever events are added/removed
+
   // When the export size profile changes, redistribute layer heights uniformly
   // for the new aspect ratio (clearing the array makes effectiveHeights fall
   // through to the freshly-computed uniformLayerH for the new profile).
@@ -1465,7 +1495,17 @@ const ComplexityTimeline = () => {
       setColumns(c => c.map((col, i) => i === editingColumn ? data : col));
       setEditingColumn(null);
     } else {
-      setColumns(c => [...c, data]);
+      // Redistribute all columns (including the new one) to equal proportional widths.
+      setColumns(prev => {
+        const all = [...prev, data];
+        const n   = all.length;
+        const span = endYear - startYear;
+        return all.map((col, i) => ({
+          ...col,
+          startYear: i === 0 ? startYear : Math.round(startYear + (i * span) / n),
+          endYear:   i === n - 1 ? endYear : Math.round(startYear + ((i + 1) * span) / n),
+        }));
+      });
     }
     setShowColumnModal(false);
   };
@@ -1829,16 +1869,31 @@ const ComplexityTimeline = () => {
       }
     });
 
-    // Columns — border lines only, no background fill
+    // Columns — color tint, border lines, accent stripe, then header text
     columns.forEach(col => {
       const x = (yearToPct(col.startYear) / 100) * w;
       const cw = (yearToPct(col.endYear) / 100) * w - x;
-      ctx.strokeStyle = 'rgba(62,59,53,0.12)'; ctx.lineWidth = 1;
+      // Background tint
+      if (col.color) {
+        ctx.save(); ctx.globalAlpha = 0.094;  // ≈ 0x18 / 0xff
+        ctx.fillStyle = col.color;
+        ctx.fillRect(x, 0, cw, h);
+        ctx.restore();
+      }
+      const borderColor = col.color ?? 'rgba(62,59,53,0.12)';
+      ctx.strokeStyle = borderColor; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x + cw, 0); ctx.lineTo(x + cw, h); ctx.stroke();
+      // Colored top accent stripe
+      if (col.color) {
+        ctx.save();
+        ctx.fillStyle = col.color;
+        ctx.fillRect(x, trendRegisterH, cw, 3);
+        ctx.restore();
+      }
       // Label + optional date range + description in the column header strip
       ctx.fillStyle = '#6b6760'; ctx.textAlign = 'center';
-      let ty = trendRegisterH + 13;
+      let ty = trendRegisterH + 3 + 13;
       ctx.font = scaledFont(10, fontScale, '600');
       ctx.fillText(col.label, x + cw / 2, ty);
       if (col.dateRange) {
@@ -1959,7 +2014,7 @@ const ComplexityTimeline = () => {
       } else {
         const cardEl = cardRefs.current[evi];
         const padding = 6; const lineHeight = 13;
-        const fontSpec = scaledFont(12, fontScale, undefined, ev.style === 'italic');
+        const fontSpec = scaledFont(14, fontScale, undefined, ev.style === 'italic');
         ctx.font = fontSpec;
         const bw = cardEl ? cardEl.offsetWidth : 110;
         const lines = wrapCanvasText(ctx, ev.label, bw - padding * 2);
@@ -2085,6 +2140,11 @@ const ComplexityTimeline = () => {
   if (!yearTicks.includes(endYear)) yearTicks.push(endYear);
   // Always mark the boundary years of each cut, so the break reads clearly.
   cuts.forEach(c => {
+    if (!yearTicks.includes(c.startYear)) yearTicks.push(c.startYear);
+    if (!yearTicks.includes(c.endYear))   yearTicks.push(c.endYear);
+  });
+  // Mark column boundary years so column edges line up with tick marks.
+  columns.forEach(c => {
     if (!yearTicks.includes(c.startYear)) yearTicks.push(c.startYear);
     if (!yearTicks.includes(c.endYear))   yearTicks.push(c.endYear);
   });
@@ -2390,12 +2450,19 @@ const ComplexityTimeline = () => {
                 );
               })}
 
-              {/* Column border lines — vertical separators, no fill */}
+              {/* Column bands — vertical separators with optional color tint */}
               {columns.map((col, i) => {
                 const left  = yearToPct(col.startYear);
                 const width = yearToPct(col.endYear) - left;
+                const colColor = col.color ?? 'rgba(62,59,53,0.12)';
                 return (
-                  <div key={i} className="u-col-annotation" style={{ left: `${left}%`, width: `${width}%` }} />
+                  <div key={i} className="u-col-annotation"
+                    style={{
+                      left: `${left}%`, width: `${width}%`,
+                      borderLeftColor: colColor,
+                      borderRightColor: colColor,
+                      ...(col.color ? { backgroundColor: `${col.color}18` } : {}),
+                    }} />
                 );
               })}
 
@@ -2490,7 +2557,10 @@ const ComplexityTimeline = () => {
                     const left  = yearToPct(col.startYear);
                     const width = yearToPct(col.endYear) - left;
                     return (
-                      <div key={i} style={{ position: 'absolute', left: `${left}%`, width: `${width}%` }}>
+                      <div key={i} style={{
+                        position: 'absolute', left: `${left}%`, width: `${width}%`,
+                        ...(col.color ? { borderTop: `3px solid ${col.color}` } : {}),
+                      }}>
                         <div className={`u-col-header-label${col.dateRange || col.description ? ' u-col-header-label--rich' : ''}`}
                           style={{ left: '50%' }}
                           onClick={e => { e.stopPropagation(); setSelectedColumn(prev => prev === i ? null : i); }}
