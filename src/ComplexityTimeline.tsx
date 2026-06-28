@@ -1889,10 +1889,12 @@ const ComplexityTimeline = () => {
       }
     });
 
-    // Columns — color tint, border lines, accent stripe, then header text
+    // Columns — color tint, border lines, accent stripe, then header text.
+    // Use eventLeftPx so column positions match event x-coordinates and respect
+    // EVENT_EDGE_PADDING (keeping columns clear of the sidebar).
     columns.forEach(col => {
-      const x = (yearToPct(col.startYear) / 100) * w;
-      const cw = (yearToPct(col.endYear) / 100) * w - x;
+      const x = eventLeftPx(yearToPct(col.startYear), w);
+      const cw = eventLeftPx(yearToPct(col.endYear), w) - x;
       // Background tint
       if (col.color) {
         ctx.save(); ctx.globalAlpha = 0.094;  // ≈ 0x18 / 0xff
@@ -1969,7 +1971,7 @@ const ComplexityTimeline = () => {
 
     // Cuts
     cuts.forEach(cut => {
-      const x = (yearToPct((cut.startYear + cut.endYear) / 2) / 100) * w;
+      const x = eventLeftPx(yearToPct((cut.startYear + cut.endYear) / 2), w);
       ctx.strokeStyle = '#3E3B35'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(x - 5, h); ctx.lineTo(x - 1, 0); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x + 1, h); ctx.lineTo(x + 5, 0); ctx.stroke();
@@ -1978,8 +1980,8 @@ const ComplexityTimeline = () => {
     // Trend bands — staggered rows, sorted by start date
     sortedTrends.forEach((trend, k) => {
       const bandTop = 3 + k * TREND_SLOT_H;
-      const x  = (yearToPct(trend.startYear) / 100) * w;
-      const tw = (yearToPct(trend.endYear)   / 100) * w - x;
+      const x  = eventLeftPx(yearToPct(trend.startYear), w);
+      const tw = eventLeftPx(yearToPct(trend.endYear), w) - x;
       ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = trend.color;
       ctx.fillRect(x, bandTop, tw, TREND_BAND_H); ctx.restore();
       ctx.fillStyle = getContrastColor(trend.color);
@@ -2112,14 +2114,32 @@ const ComplexityTimeline = () => {
     // Year axis
     const axY  = h - 48;
     ctx.strokeStyle = 'rgba(62,59,53,0.20)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, axY); ctx.lineTo(w, axY); ctx.stroke();
-    for (let yr = displayStartYear; yr <= endYear; yr += 10) {
-      if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
-      const x = (yearToPct(yr) / 100) * w;
-      ctx.strokeStyle = '#8A867E';
-      ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
-      ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
-      ctx.textAlign = 'center'; ctx.fillText(yr.toString(), x, axY + 18);
+    ctx.beginPath(); ctx.moveTo(EVENT_EDGE_PADDING, axY); ctx.lineTo(w - EVENT_EDGE_PADDING, axY); ctx.stroke();
+    ctx.strokeStyle = '#8A867E'; ctx.fillStyle = '#6b6760'; ctx.font = scaledFont(10, fontScale);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    if (columns.length > 0) {
+      // Per-column proportional: position each decade tick within the column that
+      // contains it, proportional to that column's start/end year range.
+      columns.forEach(col => {
+        const colLeft  = eventLeftPx(yearToPct(col.startYear), w);
+        const colRight = eventLeftPx(yearToPct(col.endYear), w);
+        const colSpan  = col.endYear - col.startYear;
+        for (let yr = Math.ceil(col.startYear / 10) * 10; yr <= col.endYear; yr += 10) {
+          if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
+          const frac = colSpan > 0 ? (yr - col.startYear) / colSpan : 0;
+          const x = colLeft + frac * (colRight - colLeft);
+          ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
+          ctx.fillText(yr.toString(), x, axY + 18);
+        }
+      });
+    } else {
+      // No columns: uniform proportional spacing across the content area
+      for (let yr = displayStartYear; yr <= endYear; yr += 10) {
+        if (cuts.some(c => yr > c.startYear && yr < c.endYear)) continue;
+        const x = eventLeftPx(yearToPct(yr), w);
+        ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 6); ctx.stroke();
+        ctx.fillText(yr.toString(), x, axY + 18);
+      }
     }
   }
 
