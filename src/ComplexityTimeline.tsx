@@ -2077,12 +2077,15 @@ const ComplexityTimeline = () => {
         const bh = cardEl ? cardEl.offsetHeight : Math.max(36, contentHeight);
         const centerY = y + bh / 2;
         const boxTop  = centerY - bh / 2;
+        // Keep card fully inside the content area — push right if the left half
+        // would otherwise bleed into the layer-label sidebar.
+        const cx = Math.max(x, EVENT_EDGE_PADDING + bw / 2);
         ctx.fillStyle = ev.color; ctx.strokeStyle = ev.borderColor; ctx.lineWidth = 2;
-        ctx.fillRect(x - bw / 2, boxTop, bw, bh); ctx.strokeRect(x - bw / 2, boxTop, bw, bh);
+        ctx.fillRect(cx - bw / 2, boxTop, bw, bh); ctx.strokeRect(cx - bw / 2, boxTop, bw, bh);
         ctx.fillStyle = '#3E3B35'; ctx.font = fontSpec;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const textStartY = centerY - ((lines.length - 1) * lineHeight) / 2;
-        lines.forEach((line, li) => ctx.fillText(line, x, textStartY + li * lineHeight));
+        lines.forEach((line, li) => ctx.fillText(line, cx, textStartY + li * lineHeight));
         ctx.textBaseline = 'alphabetic';
       }
     });
@@ -2262,23 +2265,45 @@ const ComplexityTimeline = () => {
     }
   };
 
-  // ── Year axis tick step ──
-  // Always includes both startYear and endYear, even when endYear doesn't
-  // fall on an even multiple of tickStep.
+  // ── Year axis ticks ──
+  // Each entry carries { year, leftPct } so the tick label and mark can be
+  // positioned independently of yearToPct when columns remap the axis.
   const yearSpan = endYear - displayStartYear;
-  const yearTicks: number[] = [];
-  if (yearSpan > 0) {
-    for (let yr = displayStartYear; yr < endYear; yr += 10) {
-      if (!cuts.some(c => yr > c.startYear && yr < c.endYear)) yearTicks.push(yr);
+  const yearAxisTicks: { year: number; leftPct: number }[] = (() => {
+    if (columns.length > 0) {
+      // Per-column: ticks come from each column's dateRange and are spread
+      // proportionally across that column's layout pixel span.
+      return columns.flatMap(col => {
+        const [ts, te] = columnTickRange(col, endYear);
+        const tSpan = te - ts;
+        const colStartPct = yearToPct(col.startYear);
+        const colEndPct   = yearToPct(col.endYear);
+        const ticks: { year: number; leftPct: number }[] = [];
+        for (let yr = Math.ceil(ts / 10) * 10; yr <= te; yr += 10) {
+          const frac = tSpan > 0 ? (yr - ts) / tSpan : 0;
+          ticks.push({ year: yr, leftPct: colStartPct + frac * (colEndPct - colStartPct) });
+        }
+        return ticks;
+      });
     }
-  }
-  if (!yearTicks.includes(endYear)) yearTicks.push(endYear);
-  // Always mark the boundary years of each cut, so the break reads clearly.
-  cuts.forEach(c => {
-    if (!yearTicks.includes(c.startYear)) yearTicks.push(c.startYear);
-    if (!yearTicks.includes(c.endYear))   yearTicks.push(c.endYear);
-  });
-  yearTicks.sort((a, b) => a - b);
+    // No columns: uniform decade spacing from displayStartYear to endYear.
+    const result: { year: number; leftPct: number }[] = [];
+    if (yearSpan > 0) {
+      for (let yr = displayStartYear; yr < endYear; yr += 10) {
+        if (!cuts.some(c => yr > c.startYear && yr < c.endYear))
+          result.push({ year: yr, leftPct: yearToPct(yr) });
+      }
+    }
+    if (!result.some(t => t.year === endYear))
+      result.push({ year: endYear, leftPct: yearToPct(endYear) });
+    // Always mark cut boundaries so the break reads clearly.
+    cuts.forEach(c => {
+      if (!result.some(t => t.year === c.startYear)) result.push({ year: c.startYear, leftPct: yearToPct(c.startYear) });
+      if (!result.some(t => t.year === c.endYear))   result.push({ year: c.endYear,   leftPct: yearToPct(c.endYear)   });
+    });
+    result.sort((a, b) => a.leftPct - b.leftPct);
+    return result;
+  })();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -2614,10 +2639,10 @@ const ComplexityTimeline = () => {
 
               {/* Year axis */}
               <div className="u-year-axis">
-                {yearTicks.map(yr => (
-                  <div key={yr} className="u-year-tick" style={{ left: `${yearToPct(yr)}%` }}>
+                {yearAxisTicks.map(({ year, leftPct }) => (
+                  <div key={year} className="u-year-tick" style={{ left: `${leftPct}%` }}>
                     <div className="u-year-tick-mark" />
-                    <div className="u-year-tick-label">{yr}</div>
+                    <div className="u-year-tick-label">{year}</div>
                   </div>
                 ))}
 
