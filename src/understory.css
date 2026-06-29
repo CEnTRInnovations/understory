@@ -233,18 +233,6 @@ h1, h2, h3 {
 }
 .u-export-menu button:hover { background: var(--bg-warm); }
 
-.u-export-menu--profiles {
-  min-width: 220px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.u-export-profile-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 /* ── EXPORT SIZE POPOVER ── */
 .u-export-size-popover {
   padding: 8px;
@@ -271,8 +259,8 @@ h1, h2, h3 {
 }
 .u-export-profile-btn:hover { background: var(--bg-warm); }
 .u-export-profile-btn--active {
-  background: rgba(62,59,53,0.08);
-  border-color: rgba(62,59,53,0.2);
+  background: var(--bg-mid);
+  border-color: var(--border);
 }
 .u-export-profile-check {
   width: 12px;
