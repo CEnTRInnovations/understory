@@ -179,32 +179,6 @@ h1, h2, h3 {
 }
 
 
-/* ── YEAR CONTROLS ── */
-.u-year-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.u-year-label {
-  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.u-year-input {
-  font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.85rem;
-  width: 68px;
-  padding: 0.28rem 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-main);
-  color: var(--text);
-  text-align: center;
-}
-.u-year-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
-
 /* ── EXPORT DROPDOWN ── */
 .u-export-wrap { position: relative; }
 .u-export-menu {
@@ -273,6 +247,108 @@ h1, h2, h3 {
 .u-export-size-footer {
   border-top: 1px solid var(--border);
   padding: 6px 8px 4px;
+}
+
+/* ── YEAR RANGE CHIP + POPOVER ── */
+.u-year-chip {
+  background: var(--bg-mid);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.u-year-chip:hover { background: var(--bg-warm); opacity: 1; }
+
+.u-year-range-popover {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 240px;
+}
+.u-year-range-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.u-year-range-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.u-year-range-field-name {
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.u-year-range-input {
+  font-family: "Alegreya Sans", sans-serif;
+  font-size: 0.9rem;
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-main);
+  color: var(--text);
+  text-align: center;
+}
+.u-year-range-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.u-year-range-dash {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  padding-bottom: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* Dual-handle range slider — two stacked <input type="range"> share the track.
+   pointer-events: none on the element; pointer-events: all on the thumb only,
+   so both thumbs are independently draggable. */
+.u-range-slider-wrap {
+  position: relative;
+  height: 24px;
+}
+.u-range-slider-track-bg {
+  position: absolute;
+  height: 4px;
+  top: 50%; left: 8px; right: 8px;
+  transform: translateY(-50%);
+  background: var(--bg-mid);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.u-range-slider {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 24px;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+}
+.u-range-slider::-webkit-slider-thumb {
+  pointer-events: all;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--btn-trend);
+  cursor: grab;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.u-range-slider::-moz-range-thumb {
+  pointer-events: all;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--btn-trend);
+  cursor: grab;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .u-export-portrait-warn {
   font-size: 0.72rem;
