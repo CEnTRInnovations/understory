@@ -1737,7 +1737,22 @@ const ComplexityTimeline = () => {
           return;
         }
       }
-      setEvents(ev => [...ev, resolveStateWidth(data)]);
+      // Place new state at DEFAULT_Y_OFFSET; shift down if it overlaps existing states
+      const containerW2 = timelineRef.current?.getBoundingClientRect().width ?? 0;
+      const usablePx2 = containerW2 - 2 * EVENT_EDGE_PADDING;
+      const newXPx = EVENT_EDGE_PADDING + (data.x / 100) * usablePx2;
+      const estimatedNewW = 130;
+      let stateY = DEFAULT_Y_OFFSET;
+      events.forEach((ev, idx) => {
+        if ((ev.type ?? 'state') !== 'state' || ev.layer !== data.layer) return;
+        const evXPx = EVENT_EDGE_PADDING + (ev.x / 100) * usablePx2;
+        const evW = ev.width ?? (cardRefs.current[idx]?.offsetWidth ?? 130);
+        if (Math.abs(newXPx - evXPx) < (estimatedNewW + evW) / 2) {
+          const evH = cardRefs.current[idx]?.offsetHeight ?? 36;
+          stateY = Math.max(stateY, ev.yOffset + evH + 16);
+        }
+      });
+      setEvents(ev => [...ev, resolveStateWidth({ ...data, yOffset: stateY })]);
     }
     setShowEventModal(false);
     setSelectedEvent(null);
@@ -2017,7 +2032,7 @@ const ComplexityTimeline = () => {
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
-    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + DEFAULT_Y_OFFSET;
+    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
     const centerY = top + halfH;
     return {
       x: evX,
@@ -2323,10 +2338,9 @@ const ComplexityTimeline = () => {
     ctx.clip();
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
-      const isEvAnchor = (ev.type ?? 'state') === 'anchor';
-      const y = topReserveH + (layerTops[ev.layer] ?? 0) + (isEvAnchor ? ev.yOffset : DEFAULT_Y_OFFSET);
+      const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
 
-      if (isEvAnchor) {
+      if ((ev.type ?? 'state') === 'anchor') {
         // Resolve the physical dot center from the live DOM so the dot aligns
         // with the autoLink vertical stem (which also uses dotCenterX).
         const anchorEl = cardRefs.current[evi];
@@ -3041,7 +3055,7 @@ const ComplexityTimeline = () => {
                     className={`u-event-node ${isAnchor ? '' : 'u-event-node--state'} ${event.width ? 'u-event-node--wide' : ''} ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
                     style={{
                       left: eventLeft(event.x),
-                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + (isAnchor ? event.yOffset : DEFAULT_Y_OFFSET)}px`,
+                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px`,
                       ...(event.width && !isAnchor ? { width: `${event.width}px`, maxWidth: 'none' } : {}),
                     }}
                     onDragStart={e => !isAnchor && handleDragStart(e, i)}
