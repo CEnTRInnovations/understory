@@ -338,6 +338,13 @@ function clampYOffset(y: number, layerHeight: number) {
   return Math.min(layerHeight - EVENT_BOTTOM_MARGIN, Math.max(EVENT_TOP_MARGIN, y));
 }
 
+// States always render at DEFAULT_Y_OFFSET unless they've been intentionally
+// shifted below an overlapping state (yOffset meaningfully > DEFAULT_Y_OFFSET).
+// Threshold of 30px distinguishes "slightly off from a canvas click" from "a real shift".
+function stateDisplayY(yOffset: number): number {
+  return yOffset > DEFAULT_Y_OFFSET + 30 ? yOffset : DEFAULT_Y_OFFSET;
+}
+
 // The year range a column's decade ticks should span. Prefers the header
 // dateRange (what the reader sees, e.g. "1968-1992" or "2022-Present"); falls
 // back to the column's layout startYear/endYear when no parseable range exists.
@@ -355,16 +362,26 @@ function columnTickRange(
   return [col.startYear, col.endYear];
 }
 
-// Fractions within a state's width for 1/2/3 anchors:
-// 1 → [⅓], 2 → [⅓, ⅔], 3 → [⅓, ½, ⅔]
-const ANCHOR_FRACS = [[], [1/3], [1/3, 2/3], [1/3, 1/2, 2/3]];
+// Pixel inset from each edge for anchor placement within a state box.
+const ANCHOR_EDGE_INSET = 20; // px
+
+// Compute xOffsetPct values (% of timeline width, signed from state center) for
+// 1–3 anchors placed at fixed pixel insets from the state's edges.
+// 1 anchor  → 20px from left edge
+// 2 anchors → 20px from left, 20px from right
+// 3 anchors → 20px from left, midpoint between those two, 20px from right
+function anchorOffsetsForState(stateWPx: number, n: number, usablePx: number): number[] {
+  if (n === 0 || usablePx <= 0) return [];
+  const leftOff  = (-stateWPx / 2 + ANCHOR_EDGE_INSET) / usablePx * 100;
+  const rightOff = ( stateWPx / 2 - ANCHOR_EDGE_INSET) / usablePx * 100;
+  if (n === 1) return [leftOff];
+  if (n === 2) return [leftOff, rightOff];
+  return [leftOff, (leftOff + rightOff) / 2, rightOff];
+}
 
 // Given a set of events (states + anchors), place auto-linked anchors at
-// equal fractional positions within their parent state's pixel width.
-// Anchors are sorted by year; up to 3 per state.
-// stateXValues provides freshly-computed state x% values.
-// cardWidths is cardRefs.current (offsetWidth per event index).
-// usablePx is the timeline's usable pixel width (container - 2 * padding).
+// fixed pixel-inset positions within their parent state's box.
+// Anchors are sorted by year (earliest = leftmost); up to 3 per state.
 function applyAnchorFractions<T extends { type?: string; year: number; x: number; xOffsetPct?: number; width?: number }>(
   events: T[],
   connections: { from: number; to: number; autoLink?: boolean }[],
@@ -383,13 +400,11 @@ function applyAnchorFractions<T extends { type?: string; year: number; x: number
   stateAnchors.forEach((anchorIdxs, stateIdx) => {
     const sorted = [...anchorIdxs].sort((a, b) => (events[a]?.year ?? 0) - (events[b]?.year ?? 0));
     const n = Math.min(sorted.length, 3);
-    const fracs = ANCHOR_FRACS[n] as number[];
     const stateX = stateXValues.get(stateIdx) ?? events[stateIdx]?.x ?? 0;
     const stateWPx = events[stateIdx]?.width ?? (cardWidths[stateIdx]?.offsetWidth ?? 130);
-    const stateWPct = usablePx > 0 ? (stateWPx / usablePx) * 100 : 0;
-    sorted.slice(0, 3).forEach((anchorIdx, k) => {
-      const xOffsetPct = (fracs[k] - 0.5) * stateWPct;
-      overrides.set(anchorIdx, { x: stateX + xOffsetPct, xOffsetPct });
+    const offsets = anchorOffsetsForState(stateWPx, n, usablePx);
+    sorted.slice(0, n).forEach((anchorIdx, k) => {
+      overrides.set(anchorIdx, { x: stateX + offsets[k], xOffsetPct: offsets[k] });
     });
   });
 
@@ -1643,7 +1658,6 @@ const ComplexityTimeline = () => {
           const containerW = timelineRef.current.getBoundingClientRect().width;
           const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
           const stateWPx   = stateEv.width ?? (cardRefs.current[stateIdx]?.offsetWidth ?? 130);
-          const stateWPct  = usablePx > 0 ? (stateWPx / usablePx) * 100 : 0;
 
           const siblingIdxs = connections
             .filter(c => c.autoLink && c.from === stateIdx)
@@ -1651,8 +1665,9 @@ const ComplexityTimeline = () => {
           const allByYear = siblingIdxs
             .map(idx => ({ idx, year: idx === editingEvent ? data.year : (events[idx]?.year ?? 0) }))
             .sort((a, b) => a.year - b.year);
-          const fracs = ANCHOR_FRACS[Math.min(allByYear.length, 3)] as number[];
-          const offsets = new Map(allByYear.slice(0, 3).map(({ idx }, k) => [idx, (fracs[k] - 0.5) * stateWPct]));
+          const n = Math.min(allByYear.length, 3);
+          const offsetValues = anchorOffsetsForState(stateWPx, n, usablePx);
+          const offsets = new Map(allByYear.slice(0, n).map(({ idx }, k) => [idx, offsetValues[k]]));
 
           setEvents(ev => ev.map((e, i) => {
             if (i === editingEvent) {
@@ -1700,11 +1715,10 @@ const ComplexityTimeline = () => {
             ? layerAnchors[0].ev.yOffset
             : clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
 
-          // Compute fraction positions for all siblings + new anchor
+          // Compute pixel-inset positions for all siblings + new anchor
           const containerW = timelineRef.current.getBoundingClientRect().width;
           const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
           const stateWPx   = stateEv.width ?? (stateCardEl?.offsetWidth ?? 130);
-          const stateWPct  = usablePx > 0 ? (stateWPx / usablePx) * 100 : 0;
 
           const newAnchorIdx = events.length;
           const allByYear = [
@@ -1712,8 +1726,8 @@ const ComplexityTimeline = () => {
             { idx: newAnchorIdx, year: data.year },
           ].sort((a, b) => a.year - b.year);
 
-          const fracs = ANCHOR_FRACS[allByYear.length] as number[];
-          const offsets = new Map(allByYear.map(({ idx }, k) => [idx, (fracs[k] - 0.5) * stateWPct]));
+          const offsetValues = anchorOffsetsForState(stateWPx, allByYear.length, usablePx);
+          const offsets = new Map(allByYear.map(({ idx }, k) => [idx, offsetValues[k]]));
 
           const newXOffsetPct = offsets.get(newAnchorIdx)!;
           const anchorData = { ...data, x: stateEv.x + newXOffsetPct, yOffset: anchorYOffset, xOffsetPct: newXOffsetPct };
@@ -2032,7 +2046,7 @@ const ComplexityTimeline = () => {
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
-    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + stateDisplayY(ev.yOffset);
     const centerY = top + halfH;
     return {
       x: evX,
@@ -2338,9 +2352,10 @@ const ComplexityTimeline = () => {
     ctx.clip();
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
-      const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+      const isEvAnchor = (ev.type ?? 'state') === 'anchor';
+      const y = topReserveH + (layerTops[ev.layer] ?? 0) + (isEvAnchor ? ev.yOffset : stateDisplayY(ev.yOffset));
 
-      if ((ev.type ?? 'state') === 'anchor') {
+      if (isEvAnchor) {
         // Resolve the physical dot center from the live DOM so the dot aligns
         // with the autoLink vertical stem (which also uses dotCenterX).
         const anchorEl = cardRefs.current[evi];
@@ -3055,7 +3070,7 @@ const ComplexityTimeline = () => {
                     className={`u-event-node ${isAnchor ? '' : 'u-event-node--state'} ${event.width ? 'u-event-node--wide' : ''} ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
                     style={{
                       left: eventLeft(event.x),
-                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px`,
+                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + (isAnchor ? event.yOffset : stateDisplayY(event.yOffset))}px`,
                       ...(event.width && !isAnchor ? { width: `${event.width}px`, maxWidth: 'none' } : {}),
                     }}
                     onDragStart={e => !isAnchor && handleDragStart(e, i)}
@@ -3146,13 +3161,12 @@ const ComplexityTimeline = () => {
                                   .map(c => c.to);
                                 setEvents(evs => {
                                   const usablePx2 = containerW - 2 * EVENT_EDGE_PADDING;
-                                  const newWPct = usablePx2 > 0 ? (newW / usablePx2) * 100 : 0;
                                   const n = Math.min(linkedAnchorIndices.length, 3);
-                                  const fracs = ANCHOR_FRACS[n] as number[];
                                   const sortedAnchors = [...linkedAnchorIndices]
                                     .sort((a, b) => (evs[a]?.year ?? 0) - (evs[b]?.year ?? 0))
                                     .slice(0, 3);
-                                  const offsets = new Map(sortedAnchors.map((anchorIdx, k) => [anchorIdx, (fracs[k] - 0.5) * newWPct]));
+                                  const offsetValues = anchorOffsetsForState(newW, n, usablePx2);
+                                  const offsets = new Map(sortedAnchors.map((anchorIdx, k) => [anchorIdx, offsetValues[k]]));
                                   return evs.map((ev, idx) => {
                                     if (idx === i) return { ...ev, width: newW, x: newX, year: newYear, endYear: newEndYear };
                                     const off = offsets.get(idx);
