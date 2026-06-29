@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { flushSync } from 'react-dom';
-import { X, Link2, Trash2, Edit2, GripVertical } from 'lucide-react';
 import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
 import { syncAnchorPositions } from './utils/anchorPositioning';
 import './understory.css';
@@ -383,7 +382,7 @@ const Modal = ({
           <div className="u-modal-title">{title}</div>
           <div className="u-modal-stripe" style={accentColor ? { background: accentColor } : undefined} />
         </div>
-        <button className="u-modal-close" onClick={onClose}><X size={16} /></button>
+        <button className="u-modal-close" onClick={onClose}><MSIcon n="close" size={16} /></button>
       </div>
       {children}
     </div>
@@ -2619,7 +2618,7 @@ const ComplexityTimeline = () => {
                       onMouseDown={e => handleLayerGripMouseDown(e, i)}
                       title="Drag to reorder layer"
                     >
-                      <GripVertical size={12} />
+                      <MSIcon n="drag_indicator" size={12} />
                     </div>
                     <span className="u-layer-label-text"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
@@ -2634,12 +2633,12 @@ const ComplexityTimeline = () => {
                     <button className="u-layer-edit"
                       onClick={() => { setEditingLayer(i); setShowLayerModal(true); }}
                       title="Edit layer">
-                      <Edit2 size={11} />
+                      <MSIcon n="edit" size={11} />
                     </button>
                     <button className="u-layer-remove"
                       onClick={() => deleteLayer(i)}
                       title="Delete layer">
-                      <X size={11} />
+                      <MSIcon n="close" size={11} />
                     </button>
                   </div>
                   {(layerDescriptions[i] ?? '') && (
@@ -2753,11 +2752,11 @@ const ComplexityTimeline = () => {
                   <div key={i} className="u-connection-actions" style={{ left: midX, top: midY }}>
                     <button className="u-event-action-btn" title="Edit connection"
                       onClick={e => { e.stopPropagation(); setEditingConnection(i); setShowConnectionModal(true); }}>
-                      <Edit2 size={13} />
+                      <MSIcon n="edit" size={13} />
                     </button>
                     <button className="u-event-action-btn u-event-action-btn--danger" title="Delete connection"
                       onClick={e => { e.stopPropagation(); deleteConnection(i); }}>
-                      <Trash2 size={13} />
+                      <MSIcon n="delete" size={13} />
                     </button>
                   </div>
                 );
@@ -2837,11 +2836,11 @@ const ComplexityTimeline = () => {
                       <div className="u-trend-actions">
                         <button className="u-event-action-btn" title="Edit trend"
                           onClick={e => { e.stopPropagation(); setEditingTrend(origIdx); setShowTrendModal(true); }}>
-                          <Edit2 size={13} />
+                          <MSIcon n="edit" size={13} />
                         </button>
                         <button className="u-event-action-btn u-event-action-btn--danger" title="Delete trend"
                           onClick={e => { e.stopPropagation(); deleteTrend(origIdx); }}>
-                          <Trash2 size={13} />
+                          <MSIcon n="delete" size={13} />
                         </button>
                       </div>
                     )}
@@ -2872,11 +2871,11 @@ const ComplexityTimeline = () => {
                           <div className="u-col-actions" style={{ top: '100%', left: '50%' }}>
                             <button className="u-event-action-btn" title="Edit column"
                               onClick={e => { e.stopPropagation(); setEditingColumn(i); setShowColumnModal(true); }}>
-                              <Edit2 size={13} />
+                              <MSIcon n="edit" size={13} />
                             </button>
                             <button className="u-event-action-btn u-event-action-btn--danger" title="Delete column"
                               onClick={e => { e.stopPropagation(); deleteColumn(i); }}>
-                              <Trash2 size={13} />
+                              <MSIcon n="delete" size={13} />
                             </button>
                           </div>
                         )}
@@ -3009,15 +3008,15 @@ const ComplexityTimeline = () => {
                           <div className="u-event-actions-main">
                             <button className="u-event-action-btn" title="Connect to another event"
                               onClick={e => { e.stopPropagation(); setConnectingFrom(i); setConnectFromSide(null); setSelectedEvent(null); }}>
-                              <Link2 size={13} />
+                              <MSIcon n="link" size={13} />
                             </button>
                             <button className="u-event-action-btn" title="Edit event"
                               onClick={e => { e.stopPropagation(); setEditingEvent(i); setShowEventModal(event); }}>
-                              <Edit2 size={13} />
+                              <MSIcon n="edit" size={13} />
                             </button>
                             <button className="u-event-action-btn u-event-action-btn--danger" title="Delete event"
                               onClick={e => { e.stopPropagation(); deleteEvent(i); }}>
-                              <Trash2 size={13} />
+                              <MSIcon n="delete" size={13} />
                             </button>
                           </div>
                           {eventConns.map(({ c, ci }) => {
@@ -3029,11 +3028,11 @@ const ComplexityTimeline = () => {
                                 <span className="u-event-conn-label" title={otherLabel}>{dir} {otherLabel}</span>
                                 <button className="u-event-action-btn" title="Edit connection"
                                   onClick={e => { e.stopPropagation(); setEditingConnection(ci); setShowConnectionModal(true); }}>
-                                  <Edit2 size={13} />
+                                  <MSIcon n="edit" size={13} />
                                 </button>
                                 <button className="u-event-action-btn u-event-action-btn--danger" title="Delete connection"
                                   onClick={e => { e.stopPropagation(); deleteConnection(ci); }}>
-                                  <Trash2 size={13} />
+                                  <MSIcon n="delete" size={13} />
                                 </button>
                               </div>
                             );
