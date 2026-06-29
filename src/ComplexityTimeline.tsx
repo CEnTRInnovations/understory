@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { flushSync } from 'react-dom';
-import { X, Plus, Link2, Trash2, Edit2, Download, Upload, Image, Layers, Columns, TrendingUp, Scissors, GripVertical } from 'lucide-react';
+import { X, Link2, Trash2, Edit2, GripVertical } from 'lucide-react';
 import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
 import { syncAnchorPositions } from './utils/anchorPositioning';
 import './understory.css';
@@ -925,56 +925,6 @@ const ConnectionModal = ({
   );
 };
 
-const CutModal = ({
-  onClose, onSave, startYear, endYear, events, initialData
-}: {
-  onClose: () => void;
-  onSave: (data: Cut) => void;
-  startYear: number;
-  endYear: number;
-  events: TimelineEvent[];
-  initialData?: Cut;
-}) => {
-  const [cutStart, setCutStart] = useState(initialData?.startYear ?? startYear + 1);
-  const [cutEnd, setCutEnd]     = useState(initialData?.endYear   ?? endYear - 1);
-  const isEditing = !!initialData;
-
-  const hasEventsInRange = events.some(e => e.year > cutStart && e.year < cutEnd);
-  const validRange = cutEnd > cutStart && cutStart > startYear && cutEnd < endYear;
-
-  const handleSave = () => {
-    if (!validRange) { alert('The cut range must fall strictly between the start and end years, with the end after the start.'); return; }
-    if (hasEventsInRange) { alert('There are events inside this year range. Move or remove them before adding a cutting point here.'); return; }
-    onSave({ startYear: cutStart, endYear: cutEnd });
-  };
-
-  return (
-    <Modal onClose={onClose} title={isEditing ? 'Edit Cutting Point' : 'Add Cutting Point'} accentColor="var(--btn-cut)">
-      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 0 }}>
-        Compresses a span of years with no events into a single break, shown as <strong>// </strong>
-        on the axis.
-      </p>
-      <div className="u-form-row">
-        <div className="u-form-group">
-          <label className="u-form-label">From Year (exclusive)</label>
-          <input className="u-form-input" type="number" value={cutStart} onChange={e => setCutStart(Number(e.target.value))} />
-        </div>
-        <div className="u-form-group">
-          <label className="u-form-label">To Year (exclusive)</label>
-          <input className="u-form-input" type="number" value={cutEnd} onChange={e => setCutEnd(Number(e.target.value))} />
-        </div>
-      </div>
-      {hasEventsInRange && (
-        <p style={{ fontSize: '0.78rem', color: 'var(--danger)' }}>
-          This range contains existing events — move or remove them first.
-        </p>
-      )}
-      <button className="u-btn u-btn--cut u-btn--full" onClick={handleSave} disabled={!validRange}>
-        {isEditing ? 'Save Cut' : 'Add Cut'}
-      </button>
-    </Modal>
-  );
-};
 
 // ── Main Component ──
 const ComplexityTimeline = () => {
@@ -1016,12 +966,10 @@ const ComplexityTimeline = () => {
 
   const [selectedTrend, setSelectedTrend]     = useState<number | null>(null);
   const [editingTrend, setEditingTrend]       = useState<number | null>(null);
+  // ponytail: addTrend/showTrendModal kept — trend editing still reachable via double-click on trend bands
 
   const [selectedConnection, setSelectedConnection] = useState<number | null>(null);
   const [editingConnection, setEditingConnection]   = useState<number | null>(null);
-
-  const [selectedCut, setSelectedCut]         = useState<number | null>(null);
-  const [editingCut, setEditingCut]           = useState<number | null>(null);
 
   const [showLayerModal, setShowLayerModal]       = useState(false);
   const [editingLayer, setEditingLayer]           = useState<number | null>(null);
@@ -1029,7 +977,6 @@ const ComplexityTimeline = () => {
   const [showColumnModal, setShowColumnModal]     = useState(false);
   const [showTrendModal, setShowTrendModal]       = useState(false);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
-  const [showCutModal, setShowCutModal]           = useState(false);
 
   const [topicalEvents, setTopicalEvents] = useState<TopicalEvent[]>([]);
   const [showTopicalEventModal, setShowTopicalEventModal] = useState<
@@ -1163,14 +1110,11 @@ const ComplexityTimeline = () => {
         setShowColumnModal(false);
         setShowTrendModal(false);
         setShowConnectionModal(false);
-        setShowCutModal(false);
         setEditingColumn(null);
         setSelectedTrend(null);
         setEditingTrend(null);
         setSelectedConnection(null);
         setEditingConnection(null);
-        setSelectedCut(null);
-        setEditingCut(null);
         setShowTopicalEventModal(false);
       }
     };
@@ -1558,22 +1502,6 @@ const ComplexityTimeline = () => {
     setSelectedTrend(null);
   };
 
-  // ── Cut ops ──
-  const addCut = (data: Cut) => {
-    if (editingCut !== null) {
-      setCuts(c => c.map((cut, i) => i === editingCut ? data : cut));
-      setEditingCut(null);
-    } else {
-      setCuts(c => [...c, data]);
-    }
-    setShowCutModal(false);
-    setSelectedCut(null);
-  };
-  const deleteCut = (i: number) => {
-    setCuts(c => c.filter((_, idx) => idx !== i));
-    setSelectedCut(null);
-  };
-
   // ── Timeline click ──
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('.u-event-node')) return;
@@ -1584,7 +1512,6 @@ const ComplexityTimeline = () => {
     setSelectedEvent(null);
     setSelectedTrend(null);
     setSelectedConnection(null);
-    setSelectedCut(null);
     if (connectingFrom !== null) { setConnectingFrom(null); setConnectFromSide(null); return; }
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
@@ -1833,7 +1760,6 @@ const ComplexityTimeline = () => {
         setSelectedEvent(null);
         setSelectedTrend(null);
         setSelectedConnection(null);
-        setSelectedCut(null);
         setConnectingFrom(null);
         setTopicalEvents(Array.isArray(data.topicalEvents) ? data.topicalEvents : []);
       } catch {
@@ -2339,27 +2265,21 @@ const ComplexityTimeline = () => {
       <div className="u-toolbar">
         {viewMode === 'process' ? (<>
           <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
-            <Layers size={13} /> Add Layer
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add_row_below</span> Add Layer
           </button>
           <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state' }); }}>
-            <Plus size={13} /> Add State
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>post_add</span> Add State
           </button>
           <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'anchor' }); }}>
-            <Plus size={13} /> Add Anchor
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>fact_check</span> Add Anchor
           </button>
-          <button className="u-btn u-btn--trend" onClick={() => { setEditingTrend(null); setShowTrendModal(true); }}>
-            <TrendingUp size={13} /> Add Trend
-            <span style={{ fontSize: '0.65rem', opacity: 0.75 }}>({trends.length}/6)</span>
-          </button>
+          {/* Add Trend button removed — trend editing still available via double-click on trend bands */}
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-            <Columns size={13} /> Add Column
-          </button>
-          <button className="u-btn u-btn--cut" onClick={() => { setEditingCut(null); setShowCutModal(true); }}>
-            <Scissors size={13} /> Add Cut
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add_column_right</span> Add Column
           </button>
         </>) : (<>
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-            <Columns size={13} /> Add Era
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add_column_right</span> Add Era
           </button>
           <button className="u-btn u-btn--outline-column" onClick={() => setShowTopicalEventModal({})}>
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>list_alt_add</span> Add Event
@@ -2372,14 +2292,14 @@ const ComplexityTimeline = () => {
           onClick={() => setViewMode('process')}
           title="Process view"
         >
-          <Layers size={13} /> Process
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>flowsheet</span> Process
         </button>
         <button
           className={`u-btn u-btn--toggle${viewMode === 'topical' ? ' u-btn--active' : ''}`}
           onClick={() => setViewMode('topical')}
           title="Topical timeline view"
         >
-          <Columns size={13} /> Timeline
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_chart</span> Timeline
         </button>
 
         <input
@@ -2398,17 +2318,17 @@ const ComplexityTimeline = () => {
 
         <div className="u-toolbar-right">
           <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
-            <Upload size={13} /> Load
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>upload_file</span> Load
           </button>
           <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
-            <Download size={13} /> Save
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>file_save</span> Save
           </button>
           <button
             className="u-btn u-btn--export"
             onClick={() => viewMode === 'topical' ? exportTopicalPNG() : exportPNG(selectedProfile)}
             title="Export as PNG image"
           >
-            <Image size={13} /> Export
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>image</span> Export
           </button>
           <div className="u-toolbar-sep" />
           <div className="u-width-controls">
@@ -2646,28 +2566,14 @@ const ComplexityTimeline = () => {
                   </div>
                 ))}
 
-                {/* Cutting points — compressed year ranges shown as a small "// " on the axis */}
+                {/* Cutting points — compressed year ranges shown as a small "// " on the axis; read-only display */}
                 {cuts.map((cut, i) => {
                   const center = yearToPct((cut.startYear + cut.endYear) / 2);
                   return (
                     <div key={i} className="u-cut-mark" style={{ left: `${center}%` }}
-                      onClick={e => { e.stopPropagation(); setSelectedCut(prev => prev === i ? null : i); }}
-                      onDoubleClick={e => { e.stopPropagation(); setEditingCut(i); setShowCutModal(true); }}
-                      title={`No events recorded in ${cut.startYear}–${cut.endYear} — confirm this is the right historiographical claim before exporting`}>
+                      title={`No events recorded in ${cut.startYear}–${cut.endYear}`}>
                       <div className="u-cut-mark-line" />
                       <div className="u-cut-mark-line" />
-                      {selectedCut === i && (
-                        <div className="u-cut-actions">
-                          <button className="u-event-action-btn" title="Edit cut"
-                            onClick={e => { e.stopPropagation(); setEditingCut(i); setShowCutModal(true); }}>
-                            <Edit2 size={13} />
-                          </button>
-                          <button className="u-event-action-btn u-event-action-btn--danger" title="Delete cut"
-                            onClick={e => { e.stopPropagation(); deleteCut(i); }}>
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -2997,16 +2903,6 @@ const ComplexityTimeline = () => {
           to={connections[editingConnection].to}
           initialData={connections[editingConnection]}
           events={events}
-        />
-      )}
-      {showCutModal && (
-        <CutModal
-          onClose={() => { setShowCutModal(false); setEditingCut(null); }}
-          onSave={addCut}
-          startYear={startYear}
-          endYear={endYear}
-          events={events}
-          initialData={editingCut !== null ? cuts[editingCut] : undefined}
         />
       )}
       {showTopicalEventModal !== false && (
