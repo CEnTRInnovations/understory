@@ -926,6 +926,10 @@ const ConnectionModal = ({
 };
 
 
+const MSIcon = ({ n, size = 13 }: { n: string; size?: number }) => (
+  <span className="material-symbols-outlined" style={{ fontSize: size }}>{n}</span>
+);
+
 // ── Main Component ──
 const ComplexityTimeline = () => {
   const [layers, setLayers]                     = useState<Layer[]>([]);
@@ -2265,24 +2269,24 @@ const ComplexityTimeline = () => {
       <div className="u-toolbar">
         {viewMode === 'process' ? (<>
           <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add_row_below</span> Add Layer
+            <MSIcon n="add_row_below" /> Add Layer
           </button>
           <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state' }); }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>post_add</span> Add State
+            <MSIcon n="post_add" /> Add State
           </button>
           <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'anchor' }); }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>fact_check</span> Add Anchor
+            <MSIcon n="fact_check" /> Add Anchor
           </button>
           {/* Add Trend button removed — trend editing still available via double-click on trend bands */}
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add_column_right</span> Add Column
+            <MSIcon n="add_column_right" /> Add Column
           </button>
         </>) : (<>
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add_column_right</span> Add Era
+            <MSIcon n="add_column_right" /> Add Era
           </button>
           <button className="u-btn u-btn--outline-column" onClick={() => setShowTopicalEventModal({})}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>list_alt_add</span> Add Event
+            <MSIcon n="list_alt_add" /> Add Event
           </button>
         </>)}
 
@@ -2292,14 +2296,14 @@ const ComplexityTimeline = () => {
           onClick={() => setViewMode('process')}
           title="Process view"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>flowsheet</span> Process
+          <MSIcon n="flowsheet" /> Process
         </button>
         <button
           className={`u-btn u-btn--toggle${viewMode === 'topical' ? ' u-btn--active' : ''}`}
           onClick={() => setViewMode('topical')}
           title="Topical timeline view"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_chart</span> Timeline
+          <MSIcon n="table_chart" /> Timeline
         </button>
 
         <input
@@ -2318,17 +2322,17 @@ const ComplexityTimeline = () => {
 
         <div className="u-toolbar-right">
           <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>upload_file</span> Load
+            <MSIcon n="upload_file" /> Load
           </button>
           <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>file_save</span> Save
+            <MSIcon n="file_save" /> Save
           </button>
           <button
             className="u-btn u-btn--export"
             onClick={() => viewMode === 'topical' ? exportTopicalPNG() : exportPNG(selectedProfile)}
             title="Export as PNG image"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>image</span> Export
+            <MSIcon n="image" /> Export
           </button>
           <div className="u-toolbar-sep" />
           <div className="u-width-controls">
