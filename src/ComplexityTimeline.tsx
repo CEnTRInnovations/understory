@@ -930,6 +930,61 @@ const MSIcon = ({ n, size = 13 }: { n: string; size?: number }) => (
   <span className="material-symbols-outlined" style={{ fontSize: size }}>{n}</span>
 );
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed by Tasks 2 & 3
+// @ts-ignore -- used by Tasks 2 & 3 (ToolbarPopover is intentionally forward-declared here)
+const ToolbarPopover = ({
+  open, onClose, children, triggerRef,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  triggerRef: React.RefObject<HTMLElement>;
+}) => {
+  const popRef = useRef<HTMLDivElement>(null);
+  const [alive, setAlive]     = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  // Open: become alive immediately. Close: play exit animation then unmount.
+  useEffect(() => {
+    if (open) {
+      setAlive(true);
+      setClosing(false);
+    } else if (alive) {
+      setClosing(true);
+      const t = setTimeout(() => { setAlive(false); setClosing(false); }, 80);
+      return () => clearTimeout(t);
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Outside-click: dismiss if click lands outside both the popover and its trigger.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        popRef.current?.contains(e.target as Node) ||
+        triggerRef.current?.contains(e.target as Node)
+      ) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open, onClose, triggerRef]);
+
+  // Escape is handled by the existing global keydown listener in ComplexityTimeline
+  // (each task adds its show* setter there). No duplicate handler needed here.
+
+  if (!alive) return null;
+  return (
+    <div
+      ref={popRef}
+      className={`u-toolbar-popover${closing ? ' u-toolbar-popover--closing' : ''}`}
+      role="dialog"
+    >
+      {children}
+    </div>
+  );
+};
+
 // ── Main Component ──
 const ComplexityTimeline = () => {
   const [layers, setLayers]                     = useState<Layer[]>([]);
