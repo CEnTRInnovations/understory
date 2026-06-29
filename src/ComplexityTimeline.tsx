@@ -511,7 +511,7 @@ const LayerModal = ({
 };
 
 const EventModal = ({
-  onClose, onSave, layers, startYear, endYear, yearToPct, initialData, events
+  onClose, onSave, layers, startYear, endYear, yearToPct, initialData, events, defaultLinkedStateIdx
 }: {
   onClose: () => void;
   onSave: (data: TimelineEvent, linkedStateIdx?: number) => void;
@@ -521,6 +521,7 @@ const EventModal = ({
   yearToPct: (year: number) => number;
   initialData?: Partial<TimelineEvent>;
   events: TimelineEvent[];
+  defaultLinkedStateIdx?: number;
 }) => {
   const midYear = Math.round((startYear + endYear) / 2);
   const eventType = initialData?.type ?? 'state';
@@ -541,7 +542,7 @@ const EventModal = ({
 
   const [linkedStateIdx, setLinkedStateIdx] = useState<number | null>(() => {
     if (eventType !== 'anchor' || !isNew) return null;
-    return statesInLayer(initialData?.layer ?? 0)[0]?.idx ?? null;
+    return defaultLinkedStateIdx ?? statesInLayer(initialData?.layer ?? 0)[0]?.idx ?? null;
   });
 
   const handleLayerChange = (newLayer: number) => {
@@ -1235,6 +1236,7 @@ const ComplexityTimeline = () => {
   const [showLayerModal, setShowLayerModal]       = useState(false);
   const [editingLayer, setEditingLayer]           = useState<number | null>(null);
   const [showEventModal, setShowEventModal]       = useState<boolean | Partial<TimelineEvent>>(false);
+  const [defaultAnchorState, setDefaultAnchorState] = useState<number | undefined>(undefined);
   const [showColumnModal, setShowColumnModal]     = useState(false);
   const [showTrendModal, setShowTrendModal]       = useState(false);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
@@ -1393,6 +1395,8 @@ const ComplexityTimeline = () => {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [layers.length, events.length]);
+
+  useEffect(() => { if (!showEventModal) setDefaultAnchorState(undefined); }, [showEventModal]);
 
   // ── Escape key ──
   useEffect(() => {
@@ -2013,7 +2017,7 @@ const ComplexityTimeline = () => {
     const cardEl  = cardRefs.current[i];
     const halfH   = cardEl ? cardEl.offsetHeight / 2 : EVENT_CARD_HALF_HEIGHT;
     const halfW   = cardEl ? cardEl.offsetWidth  / 2 : CONNECTOR_HALF_WIDTH;
-    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+    const top     = topReserveH + (layerTops[ev.layer] ?? 0) + DEFAULT_Y_OFFSET;
     const centerY = top + halfH;
     return {
       x: evX,
@@ -2039,7 +2043,7 @@ const ComplexityTimeline = () => {
       topicalEvents,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    await saveWithPicker(blob, 'understory-timeline.und', 'application/json', '.und');
+    await saveWithPicker(blob, 'understory-timeline.ustory', 'application/json', '.ustory');
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2319,9 +2323,10 @@ const ComplexityTimeline = () => {
     ctx.clip();
     events.forEach((ev, evi) => {
       const x = eventLeftPx(ev.x, w);
-      const y = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
+      const isEvAnchor = (ev.type ?? 'state') === 'anchor';
+      const y = topReserveH + (layerTops[ev.layer] ?? 0) + (isEvAnchor ? ev.yOffset : DEFAULT_Y_OFFSET);
 
-      if ((ev.type ?? 'state') === 'anchor') {
+      if (isEvAnchor) {
         // Resolve the physical dot center from the live DOM so the dot aligns
         // with the autoLink vertical stem (which also uses dotCenterX).
         const anchorEl = cardRefs.current[evi];
@@ -2631,7 +2636,7 @@ const ComplexityTimeline = () => {
           <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state' }); }}>
             <MSIcon n="post_add" /> Add State
           </button>
-          <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'anchor' }); }}>
+          <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setDefaultAnchorState(selectedEvent !== null && (events[selectedEvent]?.type ?? 'state') === 'state' ? selectedEvent : undefined); setShowEventModal({ type: 'anchor' }); }}>
             <MSIcon n="fact_check" /> Add Anchor
           </button>
           {/* Add Trend button removed — trend editing still available via double-click on trend bands */}
@@ -2666,7 +2671,7 @@ const ComplexityTimeline = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".und,.json,application/json"
+          accept=".ustory,.und,.json,application/json"
           onChange={handleImportFile}
           style={{ display: 'none' }}
         />
@@ -3036,7 +3041,7 @@ const ComplexityTimeline = () => {
                     className={`u-event-node ${isAnchor ? '' : 'u-event-node--state'} ${event.width ? 'u-event-node--wide' : ''} ${selectedEvent === i ? 'u-event-node--selected' : ''} ${connectingFrom === i ? 'u-event-node--connecting' : ''}`}
                     style={{
                       left: eventLeft(event.x),
-                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + event.yOffset}px`,
+                      top: `${topReserveH + (layerTops[event.layer] ?? 0) + (isAnchor ? event.yOffset : DEFAULT_Y_OFFSET)}px`,
                       ...(event.width && !isAnchor ? { width: `${event.width}px`, maxWidth: 'none' } : {}),
                     }}
                     onDragStart={e => !isAnchor && handleDragStart(e, i)}
@@ -3125,12 +3130,22 @@ const ComplexityTimeline = () => {
                                 const linkedAnchorIndices = connections
                                   .filter(c => c.autoLink && c.from === i)
                                   .map(c => c.to);
-                                setEvents(evs => evs.map((ev, idx) => {
-                                  if (idx === i) return { ...ev, width: newW, x: newX, year: newYear, endYear: newEndYear };
-                                  // Anchors keep their absolute x; update xOffsetPct so drags still work
-                                  if (linkedAnchorIndices.includes(idx)) return { ...ev, xOffsetPct: ev.x - newX };
-                                  return ev;
-                                }));
+                                setEvents(evs => {
+                                  const usablePx2 = containerW - 2 * EVENT_EDGE_PADDING;
+                                  const newWPct = usablePx2 > 0 ? (newW / usablePx2) * 100 : 0;
+                                  const n = Math.min(linkedAnchorIndices.length, 3);
+                                  const fracs = ANCHOR_FRACS[n] as number[];
+                                  const sortedAnchors = [...linkedAnchorIndices]
+                                    .sort((a, b) => (evs[a]?.year ?? 0) - (evs[b]?.year ?? 0))
+                                    .slice(0, 3);
+                                  const offsets = new Map(sortedAnchors.map((anchorIdx, k) => [anchorIdx, (fracs[k] - 0.5) * newWPct]));
+                                  return evs.map((ev, idx) => {
+                                    if (idx === i) return { ...ev, width: newW, x: newX, year: newYear, endYear: newEndYear };
+                                    const off = offsets.get(idx);
+                                    if (off !== undefined) return { ...ev, xOffsetPct: off, x: newX + off };
+                                    return ev;
+                                  });
+                                });
                                 if (outerEl) { outerEl.style.width = ''; outerEl.style.left = ''; }
                                 window.removeEventListener('pointermove', onMove);
                                 window.removeEventListener('pointerup', onUp);
@@ -3234,7 +3249,7 @@ const ComplexityTimeline = () => {
       )}
       {showEventModal && (
         <EventModal
-          onClose={() => { setShowEventModal(false); setEditingEvent(null); }}
+          onClose={() => { setShowEventModal(false); setEditingEvent(null); setDefaultAnchorState(undefined); }}
           onSave={addEvent}
           layers={layers}
           startYear={startYear}
@@ -3242,6 +3257,7 @@ const ComplexityTimeline = () => {
           yearToPct={eventYearToPct}
           events={events}
           initialData={editingEvent !== null ? events[editingEvent] : (typeof showEventModal === 'object' ? showEventModal : undefined)}
+          defaultLinkedStateIdx={editingEvent === null ? defaultAnchorState : undefined}
         />
       )}
       {showColumnModal && (
