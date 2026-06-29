@@ -930,8 +930,6 @@ const MSIcon = ({ n, size = 13 }: { n: string; size?: number }) => (
   <span className="material-symbols-outlined" style={{ fontSize: size }}>{n}</span>
 );
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed by Tasks 2 & 3
-// @ts-ignore -- used by Tasks 2 & 3 (ToolbarPopover is intentionally forward-declared here)
 const ToolbarPopover = ({
   open, onClose, children, triggerRef,
 }: {
@@ -985,6 +983,61 @@ const ToolbarPopover = ({
   );
 };
 
+const ExportSizePopover = ({
+  profiles, selectedId, onSelect, onConfirmExport, onClose,
+}: {
+  profiles: ExportProfile[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onConfirmExport: () => void;
+  onClose: () => void;
+}) => {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Move focus into the popover on open — land on the currently selected option.
+  useEffect(() => {
+    const selected = listRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
+    (selected ?? listRef.current?.querySelector<HTMLButtonElement>('[role="option"]'))?.focus();
+  }, []);
+
+  // Arrow Up/Down moves focus between options without selecting.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const opts = Array.from(
+      listRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []
+    );
+    const idx = opts.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); opts[Math.min(idx + 1, opts.length - 1)]?.focus(); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); opts[Math.max(idx - 1, 0)]?.focus(); }
+  };
+
+  return (
+    <div className="u-export-size-popover" onKeyDown={handleKeyDown}>
+      <div ref={listRef} role="listbox" aria-label="Export size">
+        {profiles.map(p => (
+          <button
+            key={p.id}
+            role="option"
+            aria-selected={p.id === selectedId}
+            className={`u-export-profile-btn${p.id === selectedId ? ' u-export-profile-btn--active' : ''}`}
+            onClick={() => onSelect(p.id)}
+          >
+            <span className="u-export-profile-check">{p.id === selectedId ? '✓' : ''}</span>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="u-export-size-footer">
+        <button
+          className="u-btn u-btn--export u-btn--full"
+          onClick={() => { onConfirmExport(); onClose(); }}
+        >
+          <MSIcon n="image" /> Export
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ── Main Component ──
 const ComplexityTimeline = () => {
   const [layers, setLayers]                     = useState<Layer[]>([]);
@@ -1030,6 +1083,7 @@ const ComplexityTimeline = () => {
   const [selectedConnection, setSelectedConnection] = useState<number | null>(null);
   const [editingConnection, setEditingConnection]   = useState<number | null>(null);
 
+  const [showExportPopover, setShowExportPopover] = useState(false);
   const [showLayerModal, setShowLayerModal]       = useState(false);
   const [editingLayer, setEditingLayer]           = useState<number | null>(null);
   const [showEventModal, setShowEventModal]       = useState<boolean | Partial<TimelineEvent>>(false);
@@ -1046,6 +1100,7 @@ const ComplexityTimeline = () => {
   const [topicalPrintMode, setTopicalPrintMode] = useState(false);
   const topicalViewRef = useRef<HTMLDivElement>(null);
 
+  const exportBtnRef     = useRef<HTMLButtonElement>(null);
   const timelineRef      = useRef<HTMLDivElement>(null);
   const svgRef           = useRef<SVGSVGElement>(null);
   const canvasAreaRef    = useRef<HTMLDivElement>(null);
@@ -1163,6 +1218,7 @@ const ComplexityTimeline = () => {
         setConnectFromSide(null);
         setSelectedEvent(null);
         setPendingConnection(null);
+        setShowExportPopover(false);
         setShowLayerModal(false);
         setEditingLayer(null);
         setShowEventModal(false);
@@ -2382,26 +2438,32 @@ const ComplexityTimeline = () => {
           <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
             <MSIcon n="file_save" /> Save
           </button>
-          <button
-            className="u-btn u-btn--export"
-            onClick={() => viewMode === 'topical' ? exportTopicalPNG() : exportPNG(selectedProfile)}
-            title="Export as PNG image"
-          >
-            <MSIcon n="image" /> Export
-          </button>
-          <div className="u-toolbar-sep" />
-          <div className="u-width-controls">
-            <span className="u-year-label">Size</span>
-            <select
-              className="u-profile-select"
-              value={selectedProfileId}
-              onChange={e => setSelectedProfileId(e.target.value)}
-              title="Export size / aspect ratio"
+          <div className="u-toolbar-popover-anchor">
+            <button
+              ref={exportBtnRef}
+              className="u-btn u-btn--export"
+              onClick={() => setShowExportPopover(v => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={showExportPopover}
+              title="Export as PNG image"
             >
-              {EXPORT_PROFILES.map(p => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
+              <MSIcon n="image" /> Export
+            </button>
+            <ToolbarPopover
+              open={showExportPopover}
+              onClose={() => setShowExportPopover(false)}
+              triggerRef={exportBtnRef}
+            >
+              <ExportSizePopover
+                profiles={EXPORT_PROFILES}
+                selectedId={selectedProfileId}
+                onSelect={setSelectedProfileId}
+                onConfirmExport={() =>
+                  viewMode === 'topical' ? exportTopicalPNG() : exportPNG(selectedProfile)
+                }
+                onClose={() => setShowExportPopover(false)}
+              />
+            </ToolbarPopover>
           </div>
 
           <div className="u-year-controls">

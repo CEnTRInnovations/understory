@@ -178,37 +178,6 @@ h1, h2, h3 {
   margin-left: auto;
 }
 
-/* ── CANVAS WIDTH CONTROL ── */
-.u-width-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.u-width-slider {
-  width: 120px;
-  accent-color: var(--primary);
-}
-.u-width-value {
-  font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  min-width: 52px;
-}
-.u-profile-select {
-  font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.75rem;
-  background: var(--bg-light);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text);
-  padding: 2px 6px;
-  cursor: pointer;
-  height: 24px;
-}
-.u-profile-select:focus {
-  outline: none;
-  border-color: var(--btn-export, #6b8f71);
-}
 
 /* ── YEAR CONTROLS ── */
 .u-year-controls {
@@ -276,23 +245,46 @@ h1, h2, h3 {
   flex-direction: column;
   gap: 2px;
 }
+/* ── EXPORT SIZE POPOVER ── */
+.u-export-size-popover {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .u-export-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
   text-align: left;
-  padding: 4px 8px;
-  font-size: 0.75rem;
+  padding: 5px 8px;
+  font-family: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 3px;
   cursor: pointer;
-  color: var(--text-primary, #3E3B35);
+  color: var(--text);
 }
-.u-export-profile-btn:hover {
-  background: rgba(62,59,53,0.07);
-}
+.u-export-profile-btn:hover { background: var(--bg-warm); }
 .u-export-profile-btn--active {
-  background: rgba(62,59,53,0.12);
-  border-color: rgba(62,59,53,0.3);
-  font-weight: 500;
+  background: rgba(62,59,53,0.08);
+  border-color: rgba(62,59,53,0.2);
+}
+.u-export-profile-check {
+  width: 12px;
+  display: inline-block;
+  color: var(--btn-export);
+  font-weight: 700;
+  flex-shrink: 0;
+  text-align: center;
+}
+.u-export-size-footer {
+  border-top: 1px solid var(--border);
+  padding: 6px 8px 4px;
 }
 .u-export-portrait-warn {
   font-size: 0.72rem;
