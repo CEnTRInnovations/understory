@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useReducer, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { computeLayerTops, hitTestLayer } from './utils/layerMetrics';
-import { syncAnchorPositions } from './utils/anchorPositioning';
+import './utils/anchorPositioning'; // kept for backward-compat loads; positioning now in applyAnchorFractions
 import './understory.css';
 import html2canvas from 'html2canvas';
 import { TopicalTimelineView } from './TopicalTimelineView';
@@ -353,6 +353,51 @@ function columnTickRange(
     if (end > start) return [start, end];
   }
   return [col.startYear, col.endYear];
+}
+
+// Fractions within a state's width for 1/2/3 anchors:
+// 1 → [⅓], 2 → [⅓, ⅔], 3 → [⅓, ½, ⅔]
+const ANCHOR_FRACS = [[], [1/3], [1/3, 2/3], [1/3, 1/2, 2/3]];
+
+// Given a set of events (states + anchors), place auto-linked anchors at
+// equal fractional positions within their parent state's pixel width.
+// Anchors are sorted by year; up to 3 per state.
+// stateXValues provides freshly-computed state x% values.
+// cardWidths is cardRefs.current (offsetWidth per event index).
+// usablePx is the timeline's usable pixel width (container - 2 * padding).
+function applyAnchorFractions<T extends { type?: string; year: number; x: number; xOffsetPct?: number; width?: number }>(
+  events: T[],
+  connections: { from: number; to: number; autoLink?: boolean }[],
+  stateXValues: Map<number, number>,
+  cardWidths: (HTMLElement | null)[],
+  usablePx: number,
+): T[] {
+  const stateAnchors = new Map<number, number[]>();
+  connections.forEach(c => {
+    if (!c.autoLink) return;
+    if (!stateAnchors.has(c.from)) stateAnchors.set(c.from, []);
+    stateAnchors.get(c.from)!.push(c.to);
+  });
+
+  const overrides = new Map<number, { x: number; xOffsetPct: number }>();
+  stateAnchors.forEach((anchorIdxs, stateIdx) => {
+    const sorted = [...anchorIdxs].sort((a, b) => (events[a]?.year ?? 0) - (events[b]?.year ?? 0));
+    const n = Math.min(sorted.length, 3);
+    const fracs = ANCHOR_FRACS[n] as number[];
+    const stateX = stateXValues.get(stateIdx) ?? events[stateIdx]?.x ?? 0;
+    const stateWPx = events[stateIdx]?.width ?? (cardWidths[stateIdx]?.offsetWidth ?? 130);
+    const stateWPct = usablePx > 0 ? (stateWPx / usablePx) * 100 : 0;
+    sorted.slice(0, 3).forEach((anchorIdx, k) => {
+      const xOffsetPct = (fracs[k] - 0.5) * stateWPct;
+      overrides.set(anchorIdx, { x: stateX + xOffsetPct, xOffsetPct });
+    });
+  });
+
+  return events.map((e, i) => {
+    if ((e.type ?? 'state') !== 'anchor') return e;
+    const o = overrides.get(i);
+    return o ? { ...e, ...o } : e;
+  });
 }
 
 function getContrastColor(hex: string): string {
@@ -1310,6 +1355,8 @@ const ComplexityTimeline = () => {
   // on scale changes — not when a new anchor/connection is added, which would
   // reset state positions that the user moved via drag or resize.
   useEffect(() => {
+    const containerW = timelineRef.current?.getBoundingClientRect().width ?? 0;
+    const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
     setEvents(prevEvents => {
       // Pass 1: update state x from year
       const stateXValues = new Map<number, number>();
@@ -1322,8 +1369,10 @@ const ComplexityTimeline = () => {
         stateXValues.set(i, newX);
         return { ...e, x: newX };
       });
-      // Pass 2: update anchor x from parent state + stored offset
-      return syncAnchorPositions(withStates, connectionsRef.current, stateXValues);
+      // Pass 2: fraction-based anchor positioning within each parent state.
+      // Anchors are sorted by year and placed at 1/3, [1/2,] 2/3 of the
+      // parent state's width (max 3 anchors per state).
+      return applyAnchorFractions(withStates, connectionsRef.current, stateXValues, cardRefs.current, usablePx);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventYearToPct]);
@@ -1581,6 +1630,40 @@ const ComplexityTimeline = () => {
 
   const addEvent = (data: TimelineEvent, linkedStateIdx?: number) => {
     if (editingEvent !== null) {
+      // For anchor edits, re-sort siblings by the new year and recompute fractions.
+      if ((data.type ?? 'state') === 'anchor' && timelineRef.current) {
+        const parentConn = connections.find(c => c.autoLink && c.to === editingEvent);
+        if (parentConn) {
+          const stateIdx  = parentConn.from;
+          const stateEv   = events[stateIdx];
+          const containerW = timelineRef.current.getBoundingClientRect().width;
+          const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
+          const stateWPx   = stateEv.width ?? (cardRefs.current[stateIdx]?.offsetWidth ?? 130);
+          const stateWPct  = usablePx > 0 ? (stateWPx / usablePx) * 100 : 0;
+
+          const siblingIdxs = connections
+            .filter(c => c.autoLink && c.from === stateIdx)
+            .map(c => c.to);
+          const allByYear = siblingIdxs
+            .map(idx => ({ idx, year: idx === editingEvent ? data.year : (events[idx]?.year ?? 0) }))
+            .sort((a, b) => a.year - b.year);
+          const fracs = ANCHOR_FRACS[Math.min(allByYear.length, 3)] as number[];
+          const offsets = new Map(allByYear.slice(0, 3).map(({ idx }, k) => [idx, (fracs[k] - 0.5) * stateWPct]));
+
+          setEvents(ev => ev.map((e, i) => {
+            if (i === editingEvent) {
+              const xOffsetPct = offsets.get(i) ?? e.xOffsetPct ?? 0;
+              return { ...data, xOffsetPct, x: stateEv.x + xOffsetPct };
+            }
+            const o = offsets.get(i);
+            return o !== undefined ? { ...e, xOffsetPct: o, x: stateEv.x + o } : e;
+          }));
+          setEditingEvent(null);
+          setShowEventModal(false);
+          setSelectedEvent(null);
+          return;
+        }
+      }
       setEvents(ev => ev.map((e, i) => i === editingEvent ? resolveStateWidth(data) : e));
       setEditingEvent(null);
     } else {
@@ -1593,24 +1676,51 @@ const ComplexityTimeline = () => {
           const stateCardEl = cardRefs.current[stateIdx];
           const stateH      = stateCardEl?.offsetHeight ?? 36;
 
+          // Existing auto-linked anchors on this state, sorted by year
+          const siblingIdxs = connections
+            .filter(c => c.autoLink && c.from === stateIdx)
+            .map(c => c.to)
+            .sort((a, b) => (events[a]?.year ?? 0) - (events[b]?.year ?? 0));
+
+          // Enforce max 3 anchors per state
+          if (siblingIdxs.length >= 3) {
+            setShowEventModal(false);
+            return;
+          }
+
           const layerAnchors = events
             .map((ev, idx) => ({ ev, idx }))
             .filter(({ ev }) => (ev.type ?? 'state') === 'anchor' && ev.layer === data.layer);
-          const n = layerAnchors.length;
 
-          const anchorYOffset = n > 0
+          const anchorYOffset = layerAnchors.length > 0
             ? layerAnchors[0].ev.yOffset
             : clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
 
-          // Use the year-based x from the modal (data.x = yearToPct(year)) so the anchor
-          // appears at its year position. xOffsetPct records the signed delta from the parent
-          // state so the anchor travels correctly when the state is dragged.
-          const newAnchorX  = data.x;
-          const xOffsetPct  = newAnchorX - stateEv.x;
-          const anchorData  = { ...data, x: newAnchorX, yOffset: anchorYOffset, xOffsetPct };
-          const newAnchorIdx = events.length;
+          // Compute fraction positions for all siblings + new anchor
+          const containerW = timelineRef.current.getBoundingClientRect().width;
+          const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
+          const stateWPx   = stateEv.width ?? (stateCardEl?.offsetWidth ?? 130);
+          const stateWPct  = usablePx > 0 ? (stateWPx / usablePx) * 100 : 0;
 
-          setEvents(ev => [...ev, anchorData]);
+          const newAnchorIdx = events.length;
+          const allByYear = [
+            ...siblingIdxs.map(idx => ({ idx, year: events[idx]?.year ?? 0 })),
+            { idx: newAnchorIdx, year: data.year },
+          ].sort((a, b) => a.year - b.year);
+
+          const fracs = ANCHOR_FRACS[allByYear.length] as number[];
+          const offsets = new Map(allByYear.map(({ idx }, k) => [idx, (fracs[k] - 0.5) * stateWPct]));
+
+          const newXOffsetPct = offsets.get(newAnchorIdx)!;
+          const anchorData = { ...data, x: stateEv.x + newXOffsetPct, yOffset: anchorYOffset, xOffsetPct: newXOffsetPct };
+
+          setEvents(ev => [
+            ...ev.map((e, i) => {
+              const o = offsets.get(i);
+              return o !== undefined ? { ...e, xOffsetPct: o, x: stateEv.x + o } : e;
+            }),
+            anchorData,
+          ]);
 
           setConnections(conn => [...conn, {
             from: stateIdx, to: newAnchorIdx,
