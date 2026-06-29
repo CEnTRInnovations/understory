@@ -1273,8 +1273,39 @@ const ComplexityTimeline = () => {
     [displayStartYear, endYear, cuts]
   );
 
-  // Keep cached event.x positions correct when the scale (start/end year or
-  // cuts) changes after events have already been placed.
+  // Column-aware year ↔ x% mapping for events/anchors.  When columns are
+  // present each column's dateRange defines an era; years within that era are
+  // spread proportionally across the column's layout pixel span (same formula
+  // used by yearAxisTicks).  Falls back to global mapping when no column era
+  // contains the year.
+  const eventYearToPct = useCallback((year: number): number => {
+    for (const col of columns) {
+      const [ts, te] = columnTickRange(col, endYear);
+      if (year >= ts && year <= te) {
+        const colL = yearToXWithCuts(col.startYear, displayStartYear, endYear, cuts);
+        const colR = yearToXWithCuts(col.endYear,   displayStartYear, endYear, cuts);
+        const frac = te > ts ? (year - ts) / (te - ts) : 0;
+        return colL + frac * (colR - colL);
+      }
+    }
+    return yearToXWithCuts(year, displayStartYear, endYear, cuts);
+  }, [columns, displayStartYear, endYear, cuts]);
+
+  const eventPctToYear = useCallback((pct: number): number => {
+    for (const col of columns) {
+      const colL = yearToXWithCuts(col.startYear, displayStartYear, endYear, cuts);
+      const colR = yearToXWithCuts(col.endYear,   displayStartYear, endYear, cuts);
+      if (pct >= colL && pct <= colR) {
+        const [ts, te] = columnTickRange(col, endYear);
+        const frac = colR > colL ? (pct - colL) / (colR - colL) : 0;
+        return ts + frac * (te - ts);
+      }
+    }
+    return xToYearWithCuts(pct, displayStartYear, endYear, cuts);
+  }, [columns, displayStartYear, endYear, cuts]);
+
+  // Keep cached event.x positions correct when the scale (start/end year,
+  // cuts, or column eras) changes after events have already been placed.
   // NOTE: connections is intentionally read via ref so this effect only fires
   // on scale changes — not when a new anchor/connection is added, which would
   // reset state positions that the user moved via drag or resize.
@@ -1287,7 +1318,7 @@ const ComplexityTimeline = () => {
         const centerYear = (e.endYear !== undefined && e.endYear > e.year)
           ? (e.year + e.endYear) / 2
           : e.year;
-        const newX = yearToXWithCuts(centerYear, displayStartYear, endYear, cuts);
+        const newX = eventYearToPct(centerYear);
         stateXValues.set(i, newX);
         return { ...e, x: newX };
       });
@@ -1295,7 +1326,7 @@ const ComplexityTimeline = () => {
       return syncAnchorPositions(withStates, connectionsRef.current, stateXValues);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayStartYear, endYear, cuts]);
+  }, [eventYearToPct]);
 
   // ── Warn before leaving the page ──
   // A trackpad swipe that overshoots while scrolling the timeline can be
@@ -1542,8 +1573,8 @@ const ComplexityTimeline = () => {
   const resolveStateWidth = (data: TimelineEvent): TimelineEvent => {
     if ((data.type ?? 'state') !== 'state' || data.endYear === undefined || !timelineRef.current) return data;
     const containerW = timelineRef.current.getBoundingClientRect().width;
-    const startX = yearToPct(data.year);
-    const endX   = yearToPct(data.endYear);
+    const startX = eventYearToPct(data.year);
+    const endX   = eventYearToPct(data.endYear);
     const width  = Math.max(80, eventLeftPx(endX, containerW) - eventLeftPx(startX, containerW));
     return { ...data, width, x: (startX + endX) / 2 };
   };
@@ -2979,8 +3010,8 @@ const ComplexityTimeline = () => {
                                 const newEndX = side === 'right'
                                   ? pxToPct(fixedEdgePx + newW)
                                   : pxToPct(fixedEdgePx);
-                                const newYear    = Math.round(pctToYear(newStartX));
-                                const newEndYear = Math.round(pctToYear(newEndX));
+                                const newYear    = Math.round(eventPctToYear(newStartX));
+                                const newEndYear = Math.round(eventPctToYear(newEndX));
                                 const linkedAnchorIndices = connections
                                   .filter(c => c.autoLink && c.from === i)
                                   .map(c => c.to);
@@ -3098,7 +3129,7 @@ const ComplexityTimeline = () => {
           layers={layers}
           startYear={startYear}
           endYear={endYear}
-          yearToPct={yearToPct}
+          yearToPct={eventYearToPct}
           events={events}
           initialData={editingEvent !== null ? events[editingEvent] : (typeof showEventModal === 'object' ? showEventModal : undefined)}
         />
