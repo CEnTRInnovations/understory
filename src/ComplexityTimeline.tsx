@@ -362,21 +362,27 @@ function columnTickRange(
   return [col.startYear, col.endYear];
 }
 
-// Pixel inset from each edge for anchor placement within a state box.
-const ANCHOR_EDGE_INSET = 20; // px
+// How far the dot should sit from each state edge (measured to the DOT center).
+const ANCHOR_DOT_INSET  = 20;  // px from state edge to dot
+// Estimated half-width of the rendered anchor node (.u-event-anchor, max-width 110px).
+// The node is centered at event.x via translateX(-50%), so the dot (node left + 5px)
+// sits at event.x − NODE_HALF_W + 5 ≈ event.x − 50. Correcting for this keeps the dot
+// visually inside the state box.
+const ANCHOR_NODE_HALF_W = 55; // px  (half of max-width 110px)
 
-// Compute xOffsetPct values (% of timeline width, signed from state center) for
-// 1–3 anchors placed at fixed pixel insets from the state's edges.
-// 1 anchor  → 20px from left edge
-// 2 anchors → 20px from left, 20px from right
-// 3 anchors → 20px from left, midpoint between those two, 20px from right
+// Compute NODE-CENTER xOffsetPct values (% of usable timeline width, signed from
+// state center) so each anchor's DOT lands at ANCHOR_DOT_INSET px from the state edge.
+//   dot_x = nodeCenter − ANCHOR_NODE_HALF_W
+//   1 → dot at stateLeft  + ANCHOR_DOT_INSET
+//   2 → dot at stateLeft  + ANCHOR_DOT_INSET  and  stateRight − ANCHOR_DOT_INSET
+//   3 → left, midpoint of (left + right), right
 function anchorOffsetsForState(stateWPx: number, n: number, usablePx: number): number[] {
   if (n === 0 || usablePx <= 0) return [];
-  const leftOff  = (-stateWPx / 2 + ANCHOR_EDGE_INSET) / usablePx * 100;
-  const rightOff = ( stateWPx / 2 - ANCHOR_EDGE_INSET) / usablePx * 100;
-  if (n === 1) return [leftOff];
-  if (n === 2) return [leftOff, rightOff];
-  return [leftOff, (leftOff + rightOff) / 2, rightOff];
+  const leftPx  = -stateWPx / 2 + ANCHOR_DOT_INSET  + ANCHOR_NODE_HALF_W;
+  const rightPx =  stateWPx / 2 - ANCHOR_DOT_INSET  + ANCHOR_NODE_HALF_W;
+  if (n === 1) return [leftPx  / usablePx * 100];
+  if (n === 2) return [leftPx  / usablePx * 100, rightPx / usablePx * 100];
+  return [leftPx / usablePx * 100, (leftPx + rightPx) / 2 / usablePx * 100, rightPx / usablePx * 100];
 }
 
 // Given a set of events (states + anchors), place auto-linked anchors at
@@ -1707,13 +1713,13 @@ const ComplexityTimeline = () => {
             return;
           }
 
-          const layerAnchors = events
-            .map((ev, idx) => ({ ev, idx }))
-            .filter(({ ev }) => (ev.type ?? 'state') === 'anchor' && ev.layer === data.layer);
-
-          const anchorYOffset = layerAnchors.length > 0
-            ? layerAnchors[0].ev.yOffset
-            : clampYOffset(stateEv.yOffset + stateH + 20, effectiveHeights[data.layer]);
+          // Always compute from the display position of the state so the stem is visible.
+          // Using stateEv.yOffset (stored) instead of stateDisplayY could place the anchor
+          // too close to the rendered state top, producing a zero-length stem.
+          const anchorYOffset = clampYOffset(
+            stateDisplayY(stateEv.yOffset) + stateH + 20,
+            effectiveHeights[data.layer]
+          );
 
           // Compute pixel-inset positions for all siblings + new anchor
           const containerW = timelineRef.current.getBoundingClientRect().width;
