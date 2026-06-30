@@ -137,12 +137,10 @@ const ANCHOR_ROW_GAP = 20;
 
 const BG_COLOR = '#f4ede2'; // Matches --bg-main; used for connection halo strokes and canvas background
 const LABEL_COLORS: { hex: string; name: string }[] = [
-  { hex: '#FFF3B0', name: 'Yellow' },
-  { hex: '#FFD6A5', name: 'Peach' },
-  { hex: '#CAFFBF', name: 'Mint' },
-  { hex: '#9BF6FF', name: 'Sky' },
-  { hex: '#BDB2FF', name: 'Lavender' },
-  { hex: '#FFAFCC', name: 'Rose' },
+  { hex: '#F4EDE2', name: 'Sand' },
+  { hex: '#F0EAD8', name: 'Linen' },
+  { hex: '#EAE0CA', name: 'Parchment' },
+  { hex: '#E2D4B8', name: 'Wheat' },
 ];
 const TOPICAL_BG = '#F2ECD7'; // Topical view background — matches .u-topical-area in CSS
 
