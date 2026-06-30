@@ -1481,9 +1481,8 @@ body.u-dragging-layer {
   line-height: 1.4;
   word-break: break-word;
   cursor: move;
-  box-shadow: 0 1px 4px rgba(62,59,53,0.15);
   user-select: none;
-  z-index: 5;
+  z-index: 510;
   transition: background-color 150ms ease, color 150ms ease;
 }
 
