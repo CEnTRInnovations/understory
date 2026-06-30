@@ -2229,7 +2229,7 @@ const ComplexityTimeline = () => {
         const toAnchorEl = cardRefs.current[conn.to];
         const tlRect = timelineRef.current?.getBoundingClientRect();
         const ax = toAnchorEl && tlRect
-          ? toAnchorEl.getBoundingClientRect().left - tlRect.left + 5
+          ? (toAnchorEl.getBoundingClientRect().left - tlRect.left) / zoomRef.current + 5
           : to.x;
         const ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
         ctx.save();
@@ -2396,7 +2396,7 @@ const ComplexityTimeline = () => {
         // with the autoLink vertical stem (which also uses dotCenterX).
         const anchorEl = cardRefs.current[evi];
         const tlRect   = timelineRef.current?.getBoundingClientRect();
-        const dotX     = anchorEl && tlRect ? anchorEl.getBoundingClientRect().left - tlRect.left + 5 : x;
+        const dotX     = anchorEl && tlRect ? (anchorEl.getBoundingClientRect().left - tlRect.left) / zoomRef.current + 5 : x;
         const dotR = 5;
         const textX = dotX + dotR + 6;
         // Dot
@@ -2951,7 +2951,7 @@ const ComplexityTimeline = () => {
                         const toAnchorEl = cardRefs.current[conn.to];
                         const tlRect = timelineRef.current?.getBoundingClientRect();
                         const ax = toAnchorEl && tlRect
-                          ? toAnchorEl.getBoundingClientRect().left - tlRect.left + 5
+                          ? (toAnchorEl.getBoundingClientRect().left - tlRect.left) / zoomRef.current + 5
                           : to.x;
                         const ay1 = from.bottom + ANCHOR_GAP, ay2 = to.y;
                         return { path: `M ${ax} ${ay1} L ${ax} ${ay2}` };
@@ -3211,7 +3211,7 @@ const ComplexityTimeline = () => {
                                 ? centerPx - startW / 2   // left edge stays fixed
                                 : centerPx + startW / 2;  // right edge stays fixed
                               const onMove = (me: PointerEvent) => {
-                                const delta = me.clientX - startClientX;
+                                const delta = (me.clientX - startClientX) / zoomRef.current;
                                 const newW  = Math.max(80, side === 'right'
                                   ? startW + delta
                                   : startW - delta);
