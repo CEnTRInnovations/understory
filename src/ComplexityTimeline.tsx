@@ -1019,6 +1019,59 @@ const ConnectionModal = ({
   );
 };
 
+const LabelModal = ({
+  onClose,
+  onSave,
+  initialData,
+}: {
+  onClose: () => void;
+  onSave: (data: Pick<CanvasLabel, 'text' | 'bgColor'>) => void;
+  initialData?: Pick<CanvasLabel, 'text' | 'bgColor'>;
+}) => {
+  const isEditing = !!initialData;
+  const [text, setText]       = useState(initialData?.text ?? '');
+  const [bgColor, setBgColor] = useState(initialData?.bgColor ?? LABEL_COLORS[0].hex);
+
+  const handleSave = () => {
+    if (!text.trim()) return;
+    onSave({ text: text.trim(), bgColor });
+  };
+
+  return (
+    <Modal onClose={onClose} title={isEditing ? 'Edit Label' : 'Add Label'} accentColor="var(--btn-column)">
+      <label className="u-form-label">Text</label>
+      <textarea
+        className="u-form-input"
+        rows={3}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        autoFocus
+        style={{ resize: 'vertical' }}
+      />
+      <label className="u-form-label" style={{ marginTop: '0.6rem' }}>Color</label>
+      <div className="u-label-palette">
+        {LABEL_COLORS.map(({ hex, name }) => (
+          <button
+            key={hex}
+            type="button"
+            title={name}
+            className={`u-label-swatch${bgColor === hex ? ' u-label-swatch--active' : ''}`}
+            style={{ background: hex }}
+            onClick={() => setBgColor(hex)}
+          />
+        ))}
+      </div>
+      <button
+        className="u-btn u-btn--column u-btn--full"
+        style={{ marginTop: '1rem' }}
+        onClick={handleSave}
+        disabled={!text.trim()}
+      >
+        {isEditing ? 'Save Label' : 'Add Label'}
+      </button>
+    </Modal>
+  );
+};
 
 const MSIcon = ({ n, size = 13 }: { n: string; size?: number }) => (
   <span className="material-symbols-outlined" style={{ fontSize: size }}>{n}</span>
