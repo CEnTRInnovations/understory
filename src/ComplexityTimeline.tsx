@@ -1410,7 +1410,7 @@ const ComplexityTimeline = () => {
   const topReserveH = colHeaderH + trendRegisterH;
 
   const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
-  const canvasWidth = containerWidth > 0 ? containerWidth : CANVAS_WIDTH_INIT;
+  const canvasWidth = fixedCanvasWidth ?? (containerWidth > 0 ? containerWidth : CANVAS_WIDTH_INIT);
   const uniformLayerH = (() => {
     if (selectedProfile.ratio === 0 || layers.length === 0) return LAYER_HEIGHT_DEFAULT;
     const totalH = Math.floor(canvasWidth / selectedProfile.ratio);
@@ -2962,8 +2962,8 @@ const ComplexityTimeline = () => {
 
       {/* CANVAS */}
       {viewMode === 'process' ? (
-      <div className="u-canvas-area" ref={canvasAreaRef} style={fixedCanvasWidth ? { width: fixedCanvasWidth } : undefined}>
-        <div className="u-canvas-row" style={{ height: timelineHeight, zoom }}>
+      <div className="u-canvas-area" ref={canvasAreaRef}>
+        <div className="u-canvas-row" style={{ height: timelineHeight, zoom, ...(fixedCanvasWidth ? { minWidth: fixedCanvasWidth / zoom } : {}) }}>
           {/* Sticky layer-title gutter — stays pinned during horizontal scroll,
               so titles never overlap events near the start date. */}
           {layers.length > 0 && (
