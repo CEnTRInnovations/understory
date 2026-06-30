@@ -1932,6 +1932,19 @@ const ComplexityTimeline = () => {
     setSelectedEvent(null);
   };
 
+  // ── Label ops ──
+  const addLabel = (data: Pick<CanvasLabel, 'text' | 'bgColor'>) => {
+    if (editingLabel !== null) {
+      setCanvasLabels(prev => prev.map((lbl, i) =>
+        i === editingLabel ? { ...lbl, ...data } : lbl
+      ));
+      setEditingLabel(null);
+    } else {
+      setCanvasLabels(prev => [...prev, { ...data, x: 10, y: topReserveH + 20 }]);
+    }
+    setShowLabelModal(false);
+  };
+
   // ── Connection ops ──
   const addConnection = (data: Connection) => {
     if (editingConnection !== null) {
@@ -2783,6 +2796,10 @@ const ComplexityTimeline = () => {
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
             <MSIcon n="add_column_right" /> Add Column
           </button>
+          <div className="u-toolbar-sep" />
+          <button className="u-btn u-btn--column" onClick={() => { setEditingLabel(null); setShowLabelModal(true); }}>
+            <MSIcon n="sticky_note_2" /> Add Label
+          </button>
         </>) : (<>
           <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
             <MSIcon n="add_column_right" /> Add Era
@@ -3633,6 +3650,15 @@ const ComplexityTimeline = () => {
           eraHint={showTopicalEventModal.eraHint}
           initialData={showTopicalEventModal.initialData}
           eras={columns}
+        />
+      )}
+      {showLabelModal && (
+        <LabelModal
+          onClose={() => { setShowLabelModal(false); setEditingLabel(null); }}
+          onSave={addLabel}
+          initialData={editingLabel !== null
+            ? { text: canvasLabels[editingLabel].text, bgColor: canvasLabels[editingLabel].bgColor }
+            : undefined}
         />
       )}
     </div>
