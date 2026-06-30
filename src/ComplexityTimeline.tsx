@@ -1352,6 +1352,16 @@ const ComplexityTimeline = () => {
     localStorage.setItem('understory-zoom', String(zoom));
   }, [zoom]);
 
+  // ── Fixed canvas width ──
+  const [fixedCanvasWidth, setFixedCanvasWidth] = useState<number | null>(() => {
+    const saved = parseInt(localStorage.getItem('understory-canvas-width') ?? '');
+    return isNaN(saved) ? null : saved;
+  });
+  useEffect(() => {
+    if (fixedCanvasWidth) localStorage.setItem('understory-canvas-width', String(fixedCanvasWidth));
+    else localStorage.removeItem('understory-canvas-width');
+  }, [fixedCanvasWidth]);
+
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [showYearPopover, setShowYearPopover] = useState(false);
   const [showLayerModal, setShowLayerModal]       = useState(false);
@@ -2895,6 +2905,20 @@ const ComplexityTimeline = () => {
               />
             </ToolbarPopover>
           </div>
+          <select
+            className="u-form-select"
+            style={{ width: 'auto', fontSize: '0.7rem', padding: '0.3rem 0.5rem' }}
+            value={fixedCanvasWidth ?? ''}
+            title="Fixed canvas width (matches export format)"
+            onChange={e => setFixedCanvasWidth(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Auto width</option>
+            {EXPORT_PROFILES.filter(p => p.pxWidth > 0).map(p => {
+              // ponytail: halve export px (300dpi→150dpi) for screen-friendly editing width
+              const screenW = Math.round(p.pxWidth / 2);
+              return <option key={p.id} value={screenW}>{p.label}</option>;
+            })}
+          </select>
           <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
             <button
               className="u-btn u-btn--ghost"
@@ -2938,7 +2962,7 @@ const ComplexityTimeline = () => {
 
       {/* CANVAS */}
       {viewMode === 'process' ? (
-      <div className="u-canvas-area" ref={canvasAreaRef}>
+      <div className="u-canvas-area" ref={canvasAreaRef} style={fixedCanvasWidth ? { width: fixedCanvasWidth } : undefined}>
         <div className="u-canvas-row" style={{ height: timelineHeight, zoom }}>
           {/* Sticky layer-title gutter — stays pinned during horizontal scroll,
               so titles never overlap events near the start date. */}
