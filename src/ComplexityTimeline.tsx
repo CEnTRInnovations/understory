@@ -3416,6 +3416,45 @@ const ComplexityTimeline = () => {
                     ...(label.width ? { width: `${label.width}px` } : {}),
                     background: label.bgColor,
                   }}
+                  onPointerDown={e => {
+                    // Let resize handle and action button events pass through
+                    if ((e.target as HTMLElement).closest(
+                      '.u-canvas-label__resize-handle, .u-canvas-label__actions'
+                    )) return;
+                    e.stopPropagation();
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                    const el = e.currentTarget as HTMLElement;
+                    const containerEl = timelineRef.current;
+                    if (!containerEl) return;
+                    const startClientX = e.clientX;
+                    const startClientY = e.clientY;
+                    const startX = label.x;
+                    const startY = label.y;
+                    const onMove = (me: PointerEvent) => {
+                      const containerW = containerEl.getBoundingClientRect().width / zoomRef.current;
+                      const dx = (me.clientX - startClientX) / zoomRef.current;
+                      const dy = (me.clientY - startClientY) / zoomRef.current;
+                      el.style.left = `${Math.max(0, Math.min(100, startX + (dx / containerW) * 100))}%`;
+                      el.style.top  = `${Math.max(0, startY + dy)}px`;
+                    };
+                    const onUp = (ue: PointerEvent) => {
+                      const containerW = containerEl.getBoundingClientRect().width / zoomRef.current;
+                      const dx = (ue.clientX - startClientX) / zoomRef.current;
+                      const dy = (ue.clientY - startClientY) / zoomRef.current;
+                      const newX = Math.max(0, Math.min(100, startX + (dx / containerW) * 100));
+                      const newY = Math.max(0, startY + dy);
+                      el.style.left = '';
+                      el.style.top  = '';
+                      setCanvasLabels(prev => prev.map((lbl, idx) =>
+                        idx === i ? { ...lbl, x: newX, y: newY } : lbl
+                      ));
+                      window.removeEventListener('pointermove', onMove);
+                      window.removeEventListener('pointerup', onUp);
+                    };
+                    window.addEventListener('pointermove', onMove);
+                    window.addEventListener('pointerup', onUp);
+                  }}
                   onClick={e => {
                     e.stopPropagation();
                     setSelectedLabel(prev => prev === i ? null : i);
