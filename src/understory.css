@@ -1497,7 +1497,6 @@ body.u-dragging-layer {
   text-align: center;
   user-select: none;
   z-index: 510;
-  transition: background-color 150ms ease, color 150ms ease;
 }
 
 .u-canvas-label--selected {

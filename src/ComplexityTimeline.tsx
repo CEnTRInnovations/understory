@@ -260,51 +260,6 @@ function bezierMidpoint(x1: number, y1: number, c1x: number, c1y: number, c2x: n
 }
 
 // Returns the background color of the column whose [xStart, xEnd) range
-// contains xPct (0–100). Returns null if xPct is outside all columns or
-// the matching column has no color set.
-function resolveColumnColor(
-  xPct: number,
-  columns: Column[],
-  yearToPct: (y: number) => number,
-): string | null {
-  for (const col of columns) {
-    const xStart = yearToPct(col.startYear);
-    const xEnd   = yearToPct(col.endYear);
-    if (xPct >= xStart && xPct < xEnd) return col.color ?? null;
-  }
-  return null;
-}
-
-// Returns the better-contrast text token for a given hex background, or null
-// if neither candidate reaches WCAG AA (4.5:1). Caller should fall back to
-// the fixed chip palette when null is returned.
-function resolveChipTextColor(bgHex: string): string | null {
-  const DARK_TEXT  = '#3E3B35';
-  const LIGHT_TEXT = '#F4EDE2';
-  const MIN_RATIO  = 4.5;
-
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = (hex: string) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  };
-  const contrastRatio = (l1: number, l2: number) => {
-    const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
-    return (hi + 0.05) / (lo + 0.05);
-  };
-
-  const bgLum    = luminance(bgHex);
-  const darkRat  = contrastRatio(bgLum, luminance(DARK_TEXT));
-  const lightRat = contrastRatio(bgLum, luminance(LIGHT_TEXT));
-
-  if (darkRat < MIN_RATIO && lightRat < MIN_RATIO) return null;
-  return darkRat >= lightRat ? DARK_TEXT : LIGHT_TEXT;
-}
 
 // Greedy word-wrap for canvas text, since fillText doesn't wrap on its own.
 function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
@@ -3484,22 +3439,13 @@ const ComplexityTimeline = () => {
                 <div
                   key={i}
                   className={`u-canvas-label${selectedLabel === i ? ' u-canvas-label--selected' : ''}`}
-                  style={(() => {
-                    const columnBg  = resolveColumnColor(label.x, columns, yearToPct);
-                    const resolvedBg = columnBg ?? label.bgColor;
-                    const textColor  = columnBg ? (resolveChipTextColor(resolvedBg) ?? null) : null;
-                    // Fall back entirely to fixed chip if contrast fails
-                    const finalBg   = (columnBg && textColor === null) ? label.bgColor : resolvedBg;
-                    const finalText = (columnBg && textColor !== null) ? textColor : undefined;
-                    return {
-                      left: `${label.x}%`,
-                      top: `${label.y}px`,
-                      ...(label.width ? { width: `${label.width}px` } : {}),
-                      background: finalBg,
-                      ...(finalText ? { color: finalText } : {}),
-                      zIndex: 510,
-                    };
-                  })()}
+                  style={{
+                    left: `${label.x}%`,
+                    top: `${label.y}px`,
+                    ...(label.width ? { width: `${label.width}px` } : {}),
+                    background: label.bgColor,
+                    zIndex: 510,
+                  }}
                   onPointerDown={e => {
                     if (connectingFrom !== null) return;
                     // Let resize handle and action button events pass through
@@ -3512,7 +3458,6 @@ const ComplexityTimeline = () => {
                     const el = e.currentTarget as HTMLElement;
                     const containerEl = timelineRef.current;
                     if (!containerEl) return;
-                    el.style.transition = 'none'; // suppress color cross-fade during active drag
                     const startClientX = e.clientX;
                     const startClientY = e.clientY;
                     const startX = label.x;
@@ -3523,14 +3468,6 @@ const ComplexityTimeline = () => {
                       const dy = (me.clientY - startClientY) / zoomRef.current;
                       el.style.left = `${Math.max(0, Math.min(100, startX + (dx / containerW) * 100))}%`;
                       el.style.top  = `${Math.max(0, startY + dy)}px`;
-                      // Recompute column color live so the chip tracks column boundaries mid-drag
-                      const newX = parseFloat(el.style.left);
-                      const columnBg   = resolveColumnColor(newX, columns, yearToPct);
-                      const resolvedBg = columnBg ?? label.bgColor;
-                      const textColor  = columnBg ? resolveChipTextColor(resolvedBg) : null;
-                      const finalBg    = (columnBg && textColor === null) ? label.bgColor : resolvedBg;
-                      el.style.background = finalBg;
-                      el.style.color      = (columnBg && textColor !== null) ? textColor : '';
                     };
                     const onUp = (ue: PointerEvent) => {
                       const containerW = containerEl.getBoundingClientRect().width / zoomRef.current;
@@ -3538,9 +3475,6 @@ const ComplexityTimeline = () => {
                       const dy = (ue.clientY - startClientY) / zoomRef.current;
                       const newX = Math.max(0, Math.min(100, startX + (dx / containerW) * 100));
                       const newY = Math.max(0, startY + dy);
-                      el.style.transition = '';
-                      el.style.background = '';
-                      el.style.color      = '';
                       el.style.left = '';
                       el.style.top  = '';
                       setCanvasLabels(prev => prev.map((lbl, idx) =>
