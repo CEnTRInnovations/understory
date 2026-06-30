@@ -138,9 +138,14 @@ const ANCHOR_ROW_GAP = 20;
 const BG_COLOR = '#f4ede2'; // Matches --bg-main; used for connection halo strokes and canvas background
 const LABEL_COLORS: { hex: string; name: string }[] = [
   { hex: '#F4EDE2', name: 'Sand' },
-  { hex: '#F0EAD8', name: 'Linen' },
-  { hex: '#EAE0CA', name: 'Parchment' },
-  { hex: '#E2D4B8', name: 'Wheat' },
+  { hex: '#EBD6CC', name: 'Rose' },
+  { hex: '#EAE4D5', name: 'Cream' },
+  { hex: '#E4E0D8', name: 'Dove' },
+  { hex: '#EAE1DA', name: 'Blush' },
+  { hex: '#E3CFC6', name: 'Peach' },
+  { hex: '#E2DDCE', name: 'Flax' },
+  { hex: '#DDD9D1', name: 'Stone' },
+  { hex: '#E2DAD3', name: 'Linen' },
 ];
 const TOPICAL_BG = '#F2ECD7'; // Topical view background — matches .u-topical-area in CSS
 
@@ -2831,92 +2836,57 @@ const ComplexityTimeline = () => {
 
       {/* TOOLBAR */}
       <div className="u-toolbar">
-        {viewMode === 'process' ? (<>
-          <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
-            <MSIcon n="add_row_below" /> Add Layer
-          </button>
-          <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state' }); }}>
-            <MSIcon n="post_add" /> Add State
-          </button>
-          <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setDefaultAnchorState(selectedEvent !== null && (events[selectedEvent]?.type ?? 'state') === 'state' ? selectedEvent : undefined); setShowEventModal({ type: 'anchor' }); }}>
-            <MSIcon n="fact_check" /> Add Anchor
-          </button>
-          {/* Add Trend button removed — trend editing still available via double-click on trend bands */}
-          <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-            <MSIcon n="add_column_right" /> Add Column
-          </button>
-          <div className="u-toolbar-sep" />
-          <button className="u-btn u-btn--column" onClick={() => { setEditingLabel(null); setShowLabelModal(true); }}>
-            <MSIcon n="sticky_note_2" /> Add Label
-          </button>
-        </>) : (<>
-          <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
-            <MSIcon n="add_column_right" /> Add Era
-          </button>
-          <button className="u-btn u-btn--outline-column" onClick={() => setShowTopicalEventModal({})}>
-            <MSIcon n="list_alt_add" /> Add Event
-          </button>
-        </>)}
-
-        <div className="u-toolbar-sep" />
-        <button
-          className={`u-btn u-btn--toggle${viewMode === 'process' ? ' u-btn--active' : ''}`}
-          onClick={() => setViewMode('process')}
-          title="Process view"
-        >
-          <MSIcon n="flowsheet" /> Process
-        </button>
-        <button
-          className={`u-btn u-btn--toggle${viewMode === 'topical' ? ' u-btn--active' : ''}`}
-          onClick={() => setViewMode('topical')}
-          title="Topical timeline view"
-        >
-          <MSIcon n="table_chart" /> Timeline
-        </button>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".ustory,.und,.json,application/json"
-          onChange={handleImportFile}
-          style={{ display: 'none' }}
-        />
-
-        {connectingFrom !== null && (
-          <div className="u-connecting-hint">
-            Click another event to connect (or one of its anchor dots to choose exactly where the line lands) — or press Esc to cancel
-          </div>
-        )}
-
-        <div className="u-toolbar-right">
-          {/* ── Zoom controls ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <button
-              className="u-btn u-btn--ghost"
-              onClick={() => setZoom(z => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
-              disabled={zoom <= 0.5}
-              title="Zoom out"
-              style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
-            >−</button>
-            <button
-              className="u-btn u-btn--ghost"
-              onClick={() => setZoom(1)}
-              title="Reset zoom to 100%"
-              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', minWidth: '3.2rem', textAlign: 'center' }}
-            >
-              {Math.round(zoom * 100)}%
+        {/* LEFT: context-sensitive add buttons */}
+        <div className="u-toolbar-left">
+          {viewMode === 'process' ? (<>
+            <button className="u-btn u-btn--layer" onClick={() => { setEditingLayer(null); setShowLayerModal(true); }}>
+              <MSIcon n="add_row_below" /> Add Layer
             </button>
-            <button
-              className="u-btn u-btn--ghost"
-              onClick={() => setZoom(z => Math.min(2, Math.round((z + 0.1) * 10) / 10))}
-              disabled={zoom >= 2}
-              title="Zoom in"
-              style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
-            >+</button>
-          </div>
+            <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
+              <MSIcon n="add_column_right" /> Add Column
+            </button>
+            <div className="u-toolbar-sep" />
+            <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setShowEventModal({ type: 'state' }); }}>
+              <MSIcon n="post_add" /> Add State
+            </button>
+            <button className="u-btn u-btn--event" onClick={() => { setEditingEvent(null); setDefaultAnchorState(selectedEvent !== null && (events[selectedEvent]?.type ?? 'state') === 'state' ? selectedEvent : undefined); setShowEventModal({ type: 'anchor' }); }}>
+              <MSIcon n="fact_check" /> Add Anchor
+            </button>
+            <button className="u-btn u-btn--column" onClick={() => { setEditingLabel(null); setShowLabelModal(true); }}>
+              <MSIcon n="sticky_note_2" /> Add Label
+            </button>
+          </>) : (<>
+            <button className="u-btn u-btn--column" onClick={() => { setEditingColumn(null); setShowColumnModal(true); }}>
+              <MSIcon n="add_column_right" /> Add Era
+            </button>
+            <button className="u-btn u-btn--outline-column" onClick={() => setShowTopicalEventModal({})}>
+              <MSIcon n="list_alt_add" /> Add Event
+            </button>
+          </>)}
+        </div>
 
+        {/* CENTER: view mode toggles */}
+        <div className="u-toolbar-center">
           <div className="u-toolbar-sep" />
+          <button
+            className={`u-btn u-btn--toggle${viewMode === 'process' ? ' u-btn--active' : ''}`}
+            onClick={() => setViewMode('process')}
+            title="Process view"
+          >
+            <MSIcon n="flowsheet" /> Process
+          </button>
+          <button
+            className={`u-btn u-btn--toggle${viewMode === 'topical' ? ' u-btn--active' : ''}`}
+            onClick={() => setViewMode('topical')}
+            title="Topical timeline view"
+          >
+            <MSIcon n="table_chart" /> Timeline
+          </button>
+          <div className="u-toolbar-sep" />
+        </div>
 
+        {/* RIGHT: file ops + year range + zoom */}
+        <div className="u-toolbar-right">
           <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
             <MSIcon n="upload_file" /> Load
           </button>
@@ -2950,7 +2920,7 @@ const ComplexityTimeline = () => {
               />
             </ToolbarPopover>
           </div>
-
+          <div className="u-toolbar-sep" />
           <div className="u-toolbar-popover-anchor">
             <YearRangeChip
               ref={yearBtnRef}
@@ -2970,7 +2940,45 @@ const ComplexityTimeline = () => {
               />
             </ToolbarPopover>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            <button
+              className="u-btn u-btn--ghost"
+              onClick={() => setZoom(z => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
+              disabled={zoom <= 0.5}
+              title="Zoom out"
+              style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+            >−</button>
+            <button
+              className="u-btn u-btn--ghost"
+              onClick={() => setZoom(1)}
+              title="Reset zoom to 100%"
+              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', minWidth: '3.2rem', textAlign: 'center' }}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              className="u-btn u-btn--ghost"
+              onClick={() => setZoom(z => Math.min(2, Math.round((z + 0.1) * 10) / 10))}
+              disabled={zoom >= 2}
+              title="Zoom in"
+              style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+            >+</button>
+          </div>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".ustory,.und,.json,application/json"
+          onChange={handleImportFile}
+          style={{ display: 'none' }}
+        />
+
+        {connectingFrom !== null && (
+          <div className="u-connecting-hint">
+            Click another event to connect (or one of its anchor dots to choose exactly where the line lands) — or press Esc to cancel
+          </div>
+        )}
       </div>
 
       {/* CANVAS */}

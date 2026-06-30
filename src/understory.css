@@ -170,12 +170,24 @@ h1, h2, h3 {
 }
 .u-btn--ghost:hover { background: var(--bg-warm); }
 .u-btn--full { width: 100%; justify-content: center; }
-/* ── TOOLBAR RIGHT GROUP (width + year controls) ── */
+/* ── TOOLBAR SECTIONS ── */
+.u-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+}
+.u-toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
 .u-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-left: auto;
+  gap: 0.45rem;
+  flex: 1;
+  justify-content: flex-end;
 }
 
 
@@ -1481,7 +1493,6 @@ body.u-dragging-layer {
   line-height: 1.4;
   word-break: break-word;
   cursor: move;
-  border: 1px solid rgba(62,59,53,0.15);
   background-color: var(--bg-light);
   text-align: center;
   user-select: none;
