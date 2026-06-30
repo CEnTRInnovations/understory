@@ -2184,13 +2184,14 @@ const ComplexityTimeline = () => {
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
   // reason about older files (e.g. ones missing selectedProfileId).
-  const TIMELINE_FILE_VERSION = 4;
+  const TIMELINE_FILE_VERSION = 5;
 
   const exportJSON = async () => {
     const data = {
       version: TIMELINE_FILE_VERSION,
       layers, layerDescriptions, startYear, endYear,
       events, connections, columns, trends, cuts,
+      canvasLabels,
       selectedProfileId,
       layerHeights,
       topicalEvents,
@@ -2280,6 +2281,9 @@ const ComplexityTimeline = () => {
         setSelectedConnection(null);
         setConnectingFrom(null);
         setTopicalEvents(Array.isArray(data.topicalEvents) ? data.topicalEvents : []);
+        setCanvasLabels(Array.isArray(data.canvasLabels) ? data.canvasLabels : []);
+        setSelectedLabel(null);
+        setEditingLabel(null);
       } catch {
         alert('Couldn\'t read that file — make sure it\'s a JSON export from Understory.');
       }
