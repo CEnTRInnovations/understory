@@ -1263,6 +1263,18 @@ const ComplexityTimeline = () => {
   const [selectedConnection, setSelectedConnection] = useState<number | null>(null);
   const [editingConnection, setEditingConnection]   = useState<number | null>(null);
 
+  // ── Zoom ──
+  // ponytail: setZoom consumed by Task 3 zoom controls; _ prefix silences noUnusedLocals until then
+  const [zoom, _setZoom] = useState<number>(() => {
+    const saved = parseFloat(localStorage.getItem('understory-zoom') ?? '');
+    return isNaN(saved) ? 1 : Math.min(2, Math.max(0.5, saved));
+  });
+  const zoomRef = useRef(zoom);
+  useEffect(() => {
+    zoomRef.current = zoom;
+    localStorage.setItem('understory-zoom', String(zoom));
+  }, [zoom]);
+
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [showYearPopover, setShowYearPopover] = useState(false);
   const [showLayerModal, setShowLayerModal]       = useState(false);
@@ -1390,7 +1402,7 @@ const ComplexityTimeline = () => {
   // reset state positions that the user moved via drag or resize.
   useEffect(() => {
     const containerW = timelineRef.current?.getBoundingClientRect().width ?? 0;
-    const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
+    const usablePx   = containerW / zoomRef.current - 2 * EVENT_EDGE_PADDING;
     setEvents(prevEvents => {
       // Pass 1: update state x from year
       const stateXValues = new Map<number, number>();
@@ -1593,7 +1605,7 @@ const ComplexityTimeline = () => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!gutterRef.current || !dragStateRef.current) return;
       const gutterRect = gutterRef.current.getBoundingClientRect();
-      const y = e.clientY - gutterRect.top - topReserveHRef.current;
+      const y = (e.clientY - gutterRect.top) / zoomRef.current - topReserveHRef.current;
       const over = hitTestLayer(y, layerTopsRef.current, effectiveHeightsRef.current);
       const clamped = Math.max(0, Math.min(layerTopsRef.current.length - 1,
         over < 0 ? 0 : over >= layerTopsRef.current.length ? layerTopsRef.current.length - 1 : over
@@ -1636,7 +1648,7 @@ const ComplexityTimeline = () => {
     const handleMouseMove = (e: MouseEvent) => {
       const start = resizeStartRef.current;
       if (!start || resizingLayer + 1 >= start.heights.length) return;
-      const dy = e.clientY - start.clientY;
+      const dy = (e.clientY - start.clientY) / zoomRef.current;
       const hi  = start.heights[resizingLayer];
       const hi1 = start.heights[resizingLayer + 1];
       // Clamp so neither layer goes below LAYER_HEIGHT_MIN
@@ -1665,7 +1677,7 @@ const ComplexityTimeline = () => {
   // Resolve pixel width for a state from its year span (requires container width).
   const resolveStateWidth = (data: TimelineEvent): TimelineEvent => {
     if ((data.type ?? 'state') !== 'state' || data.endYear === undefined || !timelineRef.current) return data;
-    const containerW = timelineRef.current.getBoundingClientRect().width;
+    const containerW = timelineRef.current.getBoundingClientRect().width / zoomRef.current;
     const startX = eventYearToPct(data.year);
     const endX   = eventYearToPct(data.endYear);
     const width  = Math.max(80, eventLeftPx(endX, containerW) - eventLeftPx(startX, containerW));
@@ -1681,7 +1693,7 @@ const ComplexityTimeline = () => {
           const stateIdx  = parentConn.from;
           const stateEv   = events[stateIdx];
           const containerW = timelineRef.current.getBoundingClientRect().width;
-          const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
+          const usablePx   = containerW / zoomRef.current - 2 * EVENT_EDGE_PADDING;
           const stateWPx   = stateEv.width ?? (cardRefs.current[stateIdx]?.offsetWidth ?? 130);
 
           const siblingIdxs = connections
@@ -1742,7 +1754,7 @@ const ComplexityTimeline = () => {
 
           // Compute pixel-inset positions for all siblings + new anchor
           const containerW = timelineRef.current.getBoundingClientRect().width;
-          const usablePx   = containerW - 2 * EVENT_EDGE_PADDING;
+          const usablePx   = containerW / zoomRef.current - 2 * EVENT_EDGE_PADDING;
           const stateWPx   = stateEv.width ?? (stateCardEl?.offsetWidth ?? 130);
 
           const newAnchorIdx = events.length;
@@ -1778,7 +1790,7 @@ const ComplexityTimeline = () => {
       }
       // Place new state at DEFAULT_Y_OFFSET; shift down if it overlaps existing states
       const containerW2 = timelineRef.current?.getBoundingClientRect().width ?? 0;
-      const usablePx2 = containerW2 - 2 * EVENT_EDGE_PADDING;
+      const usablePx2 = containerW2 / zoomRef.current - 2 * EVENT_EDGE_PADDING;
       const newXPx = EVENT_EDGE_PADDING + (data.x / 100) * usablePx2;
       const estimatedNewW = 130;
       let stateY = DEFAULT_Y_OFFSET;
@@ -1935,7 +1947,7 @@ const ComplexityTimeline = () => {
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x    = ((e.clientX - rect.left) / rect.width) * 100;
-    const y    = e.clientY - rect.top - topReserveH;
+    const y    = (e.clientY - rect.top) / zoomRef.current - topReserveH;
     const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
     const yOffset = clampYOffset(y - layerTops[layer], effectiveHeights[layer]);
@@ -1992,7 +2004,7 @@ const ComplexityTimeline = () => {
     const x     = Math.max(0, Math.min(100,
       ((e.clientX - rect.left - EVENT_EDGE_PADDING) / (rect.width - 2 * EVENT_EDGE_PADDING)) * 100
     ));
-    const y     = e.clientY - rect.top - topReserveH;
+    const y     = (e.clientY - rect.top) / zoomRef.current - topReserveH;
     const layer = hitTestLayer(y, layerTops, effectiveHeights);
     if (layer < 0 || layer >= layers.length) return;
     const droppedEv = events[draggingEvent];
@@ -2055,7 +2067,7 @@ const ComplexityTimeline = () => {
     const ev   = events[i];
     if (!ev || !timelineRef.current) return { x: 0, y: 0, top: 0, bottom: 0, halfWidth: CONNECTOR_HALF_WIDTH };
     const rect = timelineRef.current.getBoundingClientRect();
-    const evX  = eventLeftPx(ev.x, rect.width);
+    const evX  = eventLeftPx(ev.x, rect.width / zoomRef.current);
     if ((ev.type ?? 'state') === 'anchor') {
       const dotTop   = topReserveH + (layerTops[ev.layer] ?? 0) + ev.yOffset;
       const anchorEl = cardRefs.current[i];
@@ -3160,7 +3172,7 @@ const ComplexityTimeline = () => {
                               const startClientX = e.clientX;
                               const rect = timelineRef.current?.getBoundingClientRect();
                               if (!rect) return;
-                              const containerW = rect.width;
+                              const containerW = rect.width / zoomRef.current;
                               const startW  = event.width ?? (cardRefs.current[i]?.offsetWidth ?? 130);
                               const cardEl  = cardRefs.current[i];
                               const outerEl = cardEl?.parentElement as HTMLElement | null;
