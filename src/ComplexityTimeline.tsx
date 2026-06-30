@@ -3438,6 +3438,7 @@ const ComplexityTimeline = () => {
                     background: label.bgColor,
                   }}
                   onPointerDown={e => {
+                    if (connectingFrom !== null) return;
                     // Let resize handle and action button events pass through
                     if ((e.target as HTMLElement).closest(
                       '.u-canvas-label__resize-handle, .u-canvas-label__actions'
@@ -3477,6 +3478,7 @@ const ComplexityTimeline = () => {
                     window.addEventListener('pointerup', onUp);
                   }}
                   onClick={e => {
+                    if (connectingFrom !== null) return;
                     e.stopPropagation();
                     setSelectedLabel(prev => prev === i ? null : i);
                   }}
