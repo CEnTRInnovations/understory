@@ -123,6 +123,10 @@ const CONNECTOR_ELBOW_MAX = 90;
 // edge, so the line doesn't appear to touch/overlap the border.
 const ANCHOR_GAP = 5;
 
+// Vertical gap from a state card's actual bottom to the top of its anchor row.
+// Big enough that the connecting stem is always clearly visible (never zero/inverted).
+const ANCHOR_ROW_GAP = 20;
+
 const BG_COLOR = '#f4ede2'; // Matches --bg-main; used for connection halo strokes and canvas background
 const TOPICAL_BG = '#F2ECD7'; // Topical view background — matches .u-topical-area in CSS
 
@@ -369,6 +373,13 @@ const ANCHOR_DOT_INSET  = 20;  // px from state edge to dot
 // sits at event.x − NODE_HALF_W + 5 ≈ event.x − 50. Correcting for this keeps the dot
 // visually inside the state box.
 const ANCHOR_NODE_HALF_W = 55; // px  (half of max-width 110px)
+
+// Default anchor-node max-width (mirrors .u-event-anchor / .u-event-node max-width in CSS).
+const ANCHOR_NODE_MAX_W = 110; // px
+// Gap kept between an anchor label's edge and its era column's boundary rule.
+const ANCHOR_LABEL_PAD  = 8;   // px
+// Floor so a near-boundary anchor still renders something legible rather than collapsing.
+const ANCHOR_MIN_W      = 36;  // px
 
 // Compute NODE-CENTER xOffsetPct values (% of usable timeline width, signed from
 // state center) so each anchor's DOT lands at ANCHOR_DOT_INSET px from the state edge.
@@ -1453,35 +1464,43 @@ const ComplexityTimeline = () => {
   useLayoutEffect(() => { forceReflow(); }, [containerWidth]);
   useLayoutEffect(() => { forceReflow(); }, [events.length]);
 
-  // When a state card grows taller (text wraps), shift its autoLinked anchors
-  // down by the same delta so they don't overlap the card.
-  useEffect(() => {
+  // Pin each autoLinked anchor a fixed gap below its parent state card's ACTUAL
+  // rendered bottom. Storing yOffset and trying to keep it in sync drifts: a card
+  // that wraps to more lines (web-font swap, narrow width, file data saved when the
+  // card was shorter) leaves the dot overlapping the card and the stem inverted
+  // (ay2 < ay1 → no visible line). Reading the live DOM height every layout makes
+  // the dot always sit below the card, so the stem always connects.
+  useLayoutEffect(() => {
+    const pin = () => setEvents(evs => {
+      let changed = false;
+      const next = evs.map((ev, i) => {
+        if ((ev.type ?? 'state') !== 'anchor') return ev;
+        const pc = connectionsRef.current.find(c => c.autoLink && c.to === i);
+        if (!pc) return ev;
+        const stateEv = evs[pc.from];
+        const cardEl  = cardRefs.current[pc.from];
+        if (!stateEv || !cardEl) return ev; // can't measure yet — leave for next run
+        const want = stateDisplayY(stateEv.yOffset) + cardEl.offsetHeight + ANCHOR_ROW_GAP;
+        if (Math.abs(ev.yOffset - want) > 0.5) { changed = true; return { ...ev, yOffset: want }; }
+        return ev;
+      });
+      return changed ? next : evs;
+    });
+
+    pin(); // initial pass (refs attached, layout settled before paint)
+
+    // Re-pin when any state card resizes (font load, text rewrap, manual resize).
     const observers: ResizeObserver[] = [];
     events.forEach((ev, i) => {
       if ((ev.type ?? 'state') !== 'state') return;
       const el = cardRefs.current[i];
       if (!el) return;
-      let prevH = el.offsetHeight;
-      const ro = new ResizeObserver(entries => {
-        const newH = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect.height ?? 0;
-        if (!newH || Math.abs(newH - prevH) < 1) return;
-        const delta = newH - prevH;
-        prevH = newH;
-        setEvents(evs => {
-          const linked = connectionsRef.current
-            .filter(c => c.autoLink && c.from === i)
-            .map(c => c.to);
-          if (linked.length === 0) return evs;
-          return evs.map((e, j) =>
-            linked.includes(j) ? { ...e, yOffset: Math.max(0, e.yOffset + delta) } : e
-          );
-        });
-      });
+      const ro = new ResizeObserver(() => pin());
       ro.observe(el);
       observers.push(ro);
     });
     return () => observers.forEach(ro => ro.disconnect());
-  }, [events.length]); // re-observe whenever events are added/removed
+  }, [events.length, connections, layerHeights, topReserveH]);
 
   // When the export size profile changes, redistribute layer heights uniformly
   // for the new aspect ratio (clearing the array makes effectiveHeights fall
@@ -3069,6 +3088,27 @@ const ComplexityTimeline = () => {
               {/* Events */}
               {events.map((event, i) => {
                 const isAnchor = (event.type ?? 'state') === 'anchor';
+                // Constrain a plain anchor label so its right edge can't cross its era
+                // column's boundary rule. States already stay bounded via resolveStateWidth.
+                // The node is center-anchored (translateX(-50%)), so its right edge sits
+                // maxWidth/2 right of event.x — hence the ×2 on the available gap.
+                // Column bands are positioned as a plain % of the rail (no edge padding),
+                // while events use eventLeftPx (padded), so both endpoints are taken in px.
+                let anchorMaxW: number | undefined;
+                if (isAnchor && columns.length > 0 && canvasWidth > 0) {
+                  // Work in real px: events render padded (eventLeftPx) while column
+                  // bands render as a plain % of the rail, so the two pct spaces aren't
+                  // directly comparable. Pick the column whose rendered band actually
+                  // contains the anchor's rendered center.
+                  const centerPx   = eventLeftPx(event.x, canvasWidth);
+                  const colRightPxOf = (c: { endYear: number }) => (yearToPct(c.endYear) / 100) * canvasWidth;
+                  const colLeftPxOf  = (c: { startYear: number }) => (yearToPct(c.startYear) / 100) * canvasWidth;
+                  const col = columns.find(c => centerPx >= colLeftPxOf(c) && centerPx <= colRightPxOf(c));
+                  if (col) {
+                    const avail = 2 * (colRightPxOf(col) - ANCHOR_LABEL_PAD - centerPx);
+                    anchorMaxW = Math.max(ANCHOR_MIN_W, Math.min(ANCHOR_NODE_MAX_W, avail));
+                  }
+                }
                 return (
                   <div
                     key={i}
@@ -3078,6 +3118,7 @@ const ComplexityTimeline = () => {
                       left: eventLeft(event.x),
                       top: `${topReserveH + (layerTops[event.layer] ?? 0) + (isAnchor ? event.yOffset : stateDisplayY(event.yOffset))}px`,
                       ...(event.width && !isAnchor ? { width: `${event.width}px`, maxWidth: 'none' } : {}),
+                      ...(anchorMaxW !== undefined ? { maxWidth: `${anchorMaxW}px` } : {}),
                     }}
                     onDragStart={e => !isAnchor && handleDragStart(e, i)}
                     onClick={e => handleEventClick(e, i)}
