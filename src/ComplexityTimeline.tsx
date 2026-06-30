@@ -1264,8 +1264,7 @@ const ComplexityTimeline = () => {
   const [editingConnection, setEditingConnection]   = useState<number | null>(null);
 
   // ── Zoom ──
-  // ponytail: setZoom consumed by Task 3 zoom controls; _ prefix silences noUnusedLocals until then
-  const [zoom, _setZoom] = useState<number>(() => {
+  const [zoom, setZoom] = useState<number>(() => {
     const saved = parseFloat(localStorage.getItem('understory-zoom') ?? '');
     return isNaN(saved) ? 1 : Math.min(2, Math.max(0.5, saved));
   });
@@ -2749,6 +2748,34 @@ const ComplexityTimeline = () => {
         )}
 
         <div className="u-toolbar-right">
+          {/* ── Zoom controls ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            <button
+              className="u-btn u-btn--ghost"
+              onClick={() => setZoom(z => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
+              disabled={zoom <= 0.5}
+              title="Zoom out"
+              style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+            >−</button>
+            <button
+              className="u-btn u-btn--ghost"
+              onClick={() => setZoom(1)}
+              title="Reset zoom to 100%"
+              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', minWidth: '3.2rem', textAlign: 'center' }}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              className="u-btn u-btn--ghost"
+              onClick={() => setZoom(z => Math.min(2, Math.round((z + 0.1) * 10) / 10))}
+              disabled={zoom >= 2}
+              title="Zoom in"
+              style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+            >+</button>
+          </div>
+
+          <div className="u-toolbar-sep" />
+
           <button className="u-btn u-btn--export" onClick={triggerImportJSON} title="Load a saved .und or .json file">
             <MSIcon n="upload_file" /> Load
           </button>
@@ -2808,7 +2835,7 @@ const ComplexityTimeline = () => {
       {/* CANVAS */}
       {viewMode === 'process' ? (
       <div className="u-canvas-area" ref={canvasAreaRef}>
-        <div className="u-canvas-row" style={{ height: timelineHeight }}>
+        <div className="u-canvas-row" style={{ height: timelineHeight, zoom }}>
           {/* Sticky layer-title gutter — stays pinned during horizontal scroll,
               so titles never overlap events near the start date. */}
           {layers.length > 0 && (
