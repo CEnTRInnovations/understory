@@ -51,6 +51,7 @@ const ComplexityTimeline = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [editingEvent, setEditingEvent] = useState<number | null>(null);
   const [draggingLayer, setDraggingLayer] = useState<number | null>(null);
+  const [canvasWidth, setCanvasWidth] = useState(1122);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -632,6 +633,19 @@ const ComplexityTimeline = () => {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <label className="text-sm">Canvas:</label>
+          <select
+            value={canvasWidth}
+            onChange={(e) => setCanvasWidth(Number(e.target.value))}
+            className="px-2 py-1 border rounded text-sm"
+          >
+            <option value={1056}>US Letter landscape</option>
+            <option value={1122}>A4 landscape</option>
+            <option value={1587}>A3 / Tabloid landscape</option>
+            <option value={1920}>Full HD (1920 px)</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
           <label className="text-sm">Start:</label>
           <input
             type="number"
@@ -654,7 +668,7 @@ const ComplexityTimeline = () => {
         <div
           ref={timelineRef}
           className="relative bg-white border rounded shadow-lg"
-          style={{ height: timelineHeight, minWidth: '1200px' }}
+          style={{ height: timelineHeight, width: canvasWidth }}
           onClick={handleTimelineClick}
           onDragOver={handleEventDragOver}
           onDrop={handleEventDrop}
