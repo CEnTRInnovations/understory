@@ -3503,6 +3503,7 @@ const ComplexityTimeline = () => {
                     const el = e.currentTarget as HTMLElement;
                     const containerEl = timelineRef.current;
                     if (!containerEl) return;
+                    el.style.transition = 'none'; // suppress color cross-fade during active drag
                     const startClientX = e.clientX;
                     const startClientY = e.clientY;
                     const startX = label.x;
@@ -3513,6 +3514,14 @@ const ComplexityTimeline = () => {
                       const dy = (me.clientY - startClientY) / zoomRef.current;
                       el.style.left = `${Math.max(0, Math.min(100, startX + (dx / containerW) * 100))}%`;
                       el.style.top  = `${Math.max(0, startY + dy)}px`;
+                      // Recompute column color live so the chip tracks column boundaries mid-drag
+                      const newX = parseFloat(el.style.left);
+                      const columnBg   = resolveColumnColor(newX, columns, yearToPct);
+                      const resolvedBg = columnBg ?? label.bgColor;
+                      const textColor  = columnBg ? resolveChipTextColor(resolvedBg) : null;
+                      const finalBg    = (columnBg && textColor === null) ? label.bgColor : resolvedBg;
+                      el.style.background = finalBg;
+                      el.style.color      = (columnBg && textColor !== null) ? textColor : '';
                     };
                     const onUp = (ue: PointerEvent) => {
                       const containerW = containerEl.getBoundingClientRect().width / zoomRef.current;
@@ -3520,6 +3529,9 @@ const ComplexityTimeline = () => {
                       const dy = (ue.clientY - startClientY) / zoomRef.current;
                       const newX = Math.max(0, Math.min(100, startX + (dx / containerW) * 100));
                       const newY = Math.max(0, startY + dy);
+                      el.style.transition = '';
+                      el.style.background = '';
+                      el.style.color      = '';
                       el.style.left = '';
                       el.style.top  = '';
                       setCanvasLabels(prev => prev.map((lbl, idx) =>
