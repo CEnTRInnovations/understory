@@ -2008,6 +2008,7 @@ const ComplexityTimeline = () => {
 
   // ── Timeline click ──
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    setSelectedLabel(null);
     if ((e.target as HTMLElement).closest('.u-event-node')) return;
     if ((e.target as HTMLElement).closest('.u-connection-actions')) return;
     // SVG hit-area paths (pointer-events: stroke) bubble to this div even after
@@ -3403,6 +3404,100 @@ const ComplexityTimeline = () => {
                   </div>
                 );
               })}
+
+              {/* Canvas Labels */}
+              {canvasLabels.map((label, i) => (
+                <div
+                  key={i}
+                  className={`u-canvas-label${selectedLabel === i ? ' u-canvas-label--selected' : ''}`}
+                  style={{
+                    left: `${label.x}%`,
+                    top: `${label.y}px`,
+                    ...(label.width ? { width: `${label.width}px` } : {}),
+                    background: label.bgColor,
+                  }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setSelectedLabel(prev => prev === i ? null : i);
+                  }}
+                  onDoubleClick={e => {
+                    e.stopPropagation();
+                    setEditingLabel(i);
+                    setShowLabelModal(true);
+                  }}
+                >
+                  {label.text}
+                  {(['left', 'right'] as const).map(side => (
+                    <div
+                      key={side}
+                      className={`u-canvas-label__resize-handle u-canvas-label__resize-handle--${side}`}
+                      onPointerDown={e => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                        const outerEl = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+                        const containerEl = timelineRef.current;
+                        if (!containerEl) return;
+                        const containerW = containerEl.getBoundingClientRect().width / zoomRef.current;
+                        const startClientX = e.clientX;
+                        const startW  = label.width ?? (outerEl.offsetWidth ?? 130);
+                        const centerPx = (label.x / 100) * containerW;
+                        const fixedEdgePx = side === 'right'
+                          ? centerPx           // left edge (= label.x) stays fixed
+                          : centerPx + startW; // right edge stays fixed
+                        const onMove = (me: PointerEvent) => {
+                          const delta = (me.clientX - startClientX) / zoomRef.current;
+                          const newW  = Math.max(80, side === 'right' ? startW + delta : startW - delta);
+                          const newLeftPx = side === 'right' ? fixedEdgePx : fixedEdgePx - newW;
+                          outerEl.style.width = `${newW}px`;
+                          outerEl.style.left  = `${(newLeftPx / containerW) * 100}%`;
+                        };
+                        const onUp = (ue: PointerEvent) => {
+                          const delta = (ue.clientX - startClientX) / zoomRef.current;
+                          const newW  = Math.max(80, side === 'right' ? startW + delta : startW - delta);
+                          const newLeftPx = side === 'right' ? fixedEdgePx : fixedEdgePx - newW;
+                          const newX = (newLeftPx / containerW) * 100;
+                          outerEl.style.width = '';
+                          outerEl.style.left  = '';
+                          setCanvasLabels(prev => prev.map((lbl, idx) =>
+                            idx === i ? { ...lbl, width: newW, x: newX } : lbl
+                          ));
+                          window.removeEventListener('pointermove', onMove);
+                          window.removeEventListener('pointerup', onUp);
+                        };
+                        window.addEventListener('pointermove', onMove);
+                        window.addEventListener('pointerup', onUp);
+                      }}
+                    />
+                  ))}
+                  {selectedLabel === i && (
+                    <div className="u-canvas-label__actions">
+                      <button
+                        className="u-event-action-btn"
+                        title="Edit label"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setEditingLabel(i);
+                          setShowLabelModal(true);
+                        }}
+                      >
+                        <MSIcon n="edit" size={13} />
+                      </button>
+                      <button
+                        className="u-event-action-btn u-event-action-btn--danger"
+                        title="Delete label"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setCanvasLabels(prev => prev.filter((_, idx) => idx !== i));
+                          setSelectedLabel(null);
+                        }}
+                      >
+                        <MSIcon n="delete" size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
 
             </>
           )}
