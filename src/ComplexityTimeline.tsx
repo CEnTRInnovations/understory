@@ -55,6 +55,14 @@ type Column = { label: string; startYear: number; endYear: number; dateRange?: s
 type Trend  = { label: string; startYear: number; endYear: number; color: string };
 type Cut    = { startYear: number; endYear: number };
 
+type CanvasLabel = {
+  text: string;
+  x: number;       // left edge as % of canvas width (0–100)
+  y: number;       // px from top of u-timeline-wrap (covers topReserveH zone)
+  width?: number;  // px; undefined = auto (height auto-fits to text)
+  bgColor: string;
+};
+
 type ExportProfile = {
   id: string;
   label: string;
@@ -128,6 +136,14 @@ const ANCHOR_GAP = 5;
 const ANCHOR_ROW_GAP = 20;
 
 const BG_COLOR = '#f4ede2'; // Matches --bg-main; used for connection halo strokes and canvas background
+const LABEL_COLORS: { hex: string; name: string }[] = [
+  { hex: '#FFF3B0', name: 'Yellow' },
+  { hex: '#FFD6A5', name: 'Peach' },
+  { hex: '#CAFFBF', name: 'Mint' },
+  { hex: '#9BF6FF', name: 'Sky' },
+  { hex: '#BDB2FF', name: 'Lavender' },
+  { hex: '#FFAFCC', name: 'Rose' },
+];
 const TOPICAL_BG = '#F2ECD7'; // Topical view background — matches .u-topical-area in CSS
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -1242,6 +1258,10 @@ const ComplexityTimeline = () => {
   const [columns, setColumns]         = useState<Column[]>([]);
   const [trends, setTrends]           = useState<Trend[]>([]);
   const [cuts, setCuts]               = useState<Cut[]>([]);
+  const [canvasLabels, setCanvasLabels]     = useState<CanvasLabel[]>([]);
+  const [selectedLabel, setSelectedLabel]   = useState<number | null>(null);
+  const [editingLabel, setEditingLabel]     = useState<number | null>(null);
+  const [showLabelModal, setShowLabelModal] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string>('native');
   const [containerWidth, setContainerWidth] = useState(CANVAS_WIDTH_INIT);
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
@@ -1448,6 +1468,7 @@ const ComplexityTimeline = () => {
         setConnectingFrom(null);
         setConnectFromSide(null);
         setSelectedEvent(null);
+        setSelectedLabel(null);
         setPendingConnection(null);
         setShowExportPopover(false);
         setShowYearPopover(false);
