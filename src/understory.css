@@ -820,7 +820,7 @@ body.u-dragging-layer {
   max-width: 130px;
 }
 .u-event-node:not(.u-event-node--state) {
-  max-width: 110px;
+  max-width: 83px;
 }
 .u-event-card {
   padding: 0.32rem 0.55rem;
@@ -828,7 +828,7 @@ body.u-dragging-layer {
   border-width: 2px;
   border-style: solid;
   font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.825rem;
+  font-size: 0.62rem;
   text-align: center;
   line-height: 1.4;
   box-shadow: 0 1px 4px rgba(62,59,53,0.12);
@@ -903,7 +903,7 @@ body.u-dragging-layer {
   align-items: flex-start;
   gap: 4px;
   cursor: move;
-  max-width: 110px;
+  max-width: 83px;
 }
 .u-event-anchor__dot {
   width: 10px;
@@ -919,13 +919,13 @@ body.u-dragging-layer {
 }
 .u-event-anchor__year {
   font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.2;
 }
 .u-event-anchor__label {
   font-family: "Alegreya Sans", sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.62rem;
   line-height: 1.3;
   word-break: break-word;
 }

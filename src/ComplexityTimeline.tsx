@@ -94,7 +94,7 @@ const EVENT_EDGE_PADDING = 70; // px
 // Approx half-height of a one-line event card, used to anchor connector
 // lines to the card's top/bottom edge (rather than its side) when two
 // connected events sit roughly one above the other.
-const EVENT_CARD_HALF_HEIGHT = 18; // px
+const EVENT_CARD_HALF_HEIGHT = 14; // px
 
 // ── Trend / column header register ──
 const COLUMN_HEADER_H  = 26; // px — column-label row below trend register
@@ -108,9 +108,9 @@ type Side = 'top' | 'right' | 'bottom' | 'left';
 
 type EventAnchor = { x: number; y: number; top: number; bottom: number; halfWidth?: number };
 
-// Half the event-card width (110px / 2), used as a fallback to place
+// Half the event-card width (83px / 2), used as a fallback to place
 // left/right anchors when the real card hasn't been measured yet.
-const CONNECTOR_HALF_WIDTH = 55;
+const CONNECTOR_HALF_WIDTH = 41;
 // How far a connector "pushes out" perpendicular to its anchor edge before
 // curving toward the other endpoint — gives every connection a clean,
 // perpendicular departure/arrival from the card instead of a diagonal cut.
@@ -368,14 +368,14 @@ function columnTickRange(
 
 // How far the dot should sit from each state edge (measured to the DOT center).
 const ANCHOR_DOT_INSET  = 20;  // px from state edge to dot
-// Estimated half-width of the rendered anchor node (.u-event-anchor, max-width 110px).
+// Estimated half-width of the rendered anchor node (.u-event-anchor, max-width 83px).
 // The node is centered at event.x via translateX(-50%), so the dot (node left + 5px)
-// sits at event.x − NODE_HALF_W + 5 ≈ event.x − 50. Correcting for this keeps the dot
+// sits at event.x − NODE_HALF_W + 5 ≈ event.x − 41. Correcting for this keeps the dot
 // visually inside the state box.
-const ANCHOR_NODE_HALF_W = 55; // px  (half of max-width 110px)
+const ANCHOR_NODE_HALF_W = 41; // px  (half of max-width 83px)
 
 // Default anchor-node max-width (mirrors .u-event-anchor / .u-event-node max-width in CSS).
-const ANCHOR_NODE_MAX_W = 110; // px
+const ANCHOR_NODE_MAX_W = 83; // px
 // Gap kept between an anchor label's edge and its era column's boundary rule.
 const ANCHOR_LABEL_PAD  = 8;   // px
 // Floor so a near-boundary anchor still renders something legible rather than collapsing.
