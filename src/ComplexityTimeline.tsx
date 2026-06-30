@@ -3489,6 +3489,7 @@ const ComplexityTimeline = () => {
                       ...(label.width ? { width: `${label.width}px` } : {}),
                       background: finalBg,
                       ...(finalText ? { color: finalText } : {}),
+                      zIndex: 510,
                     };
                   })()}
                   onPointerDown={e => {
