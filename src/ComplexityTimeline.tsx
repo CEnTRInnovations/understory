@@ -158,15 +158,30 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-async function saveWithPicker(blob: Blob, suggestedName: string, mimeType: string, ext: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FileHandleRef = React.MutableRefObject<any>;
+
+async function saveWithPicker(
+  blob: Blob, suggestedName: string, mimeType: string, ext: string,
+  handleRef?: FileHandleRef,
+) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ('showSaveFilePicker' in window) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName,
-        types: [{ description: 'File', accept: { [mimeType]: [ext] } }],
-      });
+      let handle: any = handleRef?.current;
+      if (handle) {
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') handle = null;
+      }
+      if (!handle) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        handle = await (window as any).showSaveFilePicker({
+          suggestedName,
+          types: [{ description: 'File', accept: { [mimeType]: [ext] } }],
+        });
+        if (handleRef) handleRef.current = handle;
+      }
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
@@ -175,10 +190,8 @@ async function saveWithPicker(blob: Blob, suggestedName: string, mimeType: strin
       if ((e as Error).name === 'AbortError') return;
     }
   }
-  // Firefox / Safari: prompt for filename since no native save dialog exists
-  const name = window.prompt('File name:', suggestedName);
-  if (name === null) return; // cancelled
-  downloadBlob(blob, name.endsWith(ext) ? name : name + ext);
+  // Firefox / Safari fallback
+  downloadBlob(blob, suggestedName);
 }
 
 function autoSide(center: { x: number; y: number }, other: { x: number; y: number }): Side {
@@ -1327,6 +1340,8 @@ const ComplexityTimeline = () => {
 
   const yearBtnRef       = useRef<HTMLButtonElement>(null);
   const timelineRef      = useRef<HTMLDivElement>(null);
+  const jsonHandleRef    = useRef<any>(null); // persists file handle so Save overwrites in place
+  const pngHandleRef     = useRef<any>(null); // persists file handle so Export overwrites in place
   const svgRef           = useRef<SVGSVGElement>(null);
   const canvasAreaRef    = useRef<HTMLDivElement>(null);
   // Real rendered card elements, so connector anchors can hug the actual
@@ -2155,7 +2170,7 @@ const ComplexityTimeline = () => {
       topicalEvents,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    await saveWithPicker(blob, 'understory-timeline.ustory', 'application/json', '.ustory');
+    await saveWithPicker(blob, 'understory-timeline.ustory', 'application/json', '.ustory', jsonHandleRef);
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2174,6 +2189,7 @@ const ComplexityTimeline = () => {
           alert('This file doesn\'t look like an Understory timeline export.');
           return;
         }
+        jsonHandleRef.current = null; // next Save should prompt for a destination
         setLayers((data.layers ?? []).map((l: any) =>
           typeof l === 'string' ? { label: l } : l
         ));
@@ -2670,7 +2686,7 @@ const ComplexityTimeline = () => {
     }
 
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-    if (blob) await saveWithPicker(blob, 'understory-timeline.png', 'image/png', '.png');
+    if (blob) await saveWithPicker(blob, 'understory-timeline.png', 'image/png', '.png', pngHandleRef);
   };
 
   const exportTopicalPNG = async () => {
@@ -2684,7 +2700,7 @@ const ComplexityTimeline = () => {
         logging: false,
       });
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-      if (blob) await saveWithPicker(blob, 'understory-topical-timeline.png', 'image/png', '.png');
+      if (blob) await saveWithPicker(blob, 'understory-topical-timeline.png', 'image/png', '.png', pngHandleRef);
     } catch (err) {
       console.error('Topical PNG export failed:', err);
     } finally {
