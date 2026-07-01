@@ -1135,60 +1135,6 @@ const ToolbarPopover = ({
   );
 };
 
-const ExportSizePopover = ({
-  profiles, selectedId, onSelect, onConfirmExport, onClose,
-}: {
-  profiles: ExportProfile[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-  onConfirmExport: () => void;
-  onClose: () => void;
-}) => {
-  const listRef = useRef<HTMLDivElement>(null);
-
-  // Move focus into the popover on open — land on the currently selected option.
-  useEffect(() => {
-    const selected = listRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
-    (selected ?? listRef.current?.querySelector<HTMLButtonElement>('[role="option"]'))?.focus();
-  }, []);
-
-  // Arrow Up/Down moves focus between options without selecting.
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const opts = Array.from(
-      listRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []
-    );
-    const idx = opts.indexOf(document.activeElement as HTMLButtonElement);
-    if (e.key === 'ArrowDown') { e.preventDefault(); opts[Math.min(idx + 1, opts.length - 1)]?.focus(); }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); opts[Math.max(idx - 1, 0)]?.focus(); }
-  };
-
-  return (
-    <div className="u-export-size-popover" onKeyDown={handleKeyDown}>
-      <div ref={listRef} role="listbox" aria-label="Export size">
-        {profiles.map(p => (
-          <button
-            key={p.id}
-            role="option"
-            aria-selected={p.id === selectedId}
-            className={`u-export-profile-btn${p.id === selectedId ? ' u-export-profile-btn--active' : ''}`}
-            onClick={() => onSelect(p.id)}
-          >
-            <span className="u-export-profile-check">{p.id === selectedId ? '✓' : ''}</span>
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div className="u-export-size-footer">
-        <button
-          className="u-btn u-btn--export u-btn--full"
-          onClick={() => { onConfirmExport(); onClose(); }}
-        >
-          <MSIcon n="image" /> Export
-        </button>
-      </div>
-    </div>
-  );
-};
 
 const MIN_YEAR = 1800;
 const MAX_YEAR = 2100;
@@ -1320,7 +1266,6 @@ const ComplexityTimeline = () => {
   const [selectedLabel, setSelectedLabel]   = useState<number | null>(null);
   const [editingLabel, setEditingLabel]     = useState<number | null>(null);
   const [showLabelModal, setShowLabelModal] = useState(false);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('native');
   const [containerWidth, setContainerWidth] = useState(CANVAS_WIDTH_INIT);
   const [selectedEvent, setSelectedEvent]     = useState<number | null>(null);
   const [connectingFrom, setConnectingFrom]   = useState<number | null>(null);
@@ -1362,7 +1307,6 @@ const ComplexityTimeline = () => {
     else localStorage.removeItem('understory-canvas-width');
   }, [fixedCanvasWidth]);
 
-  const [showExportPopover, setShowExportPopover] = useState(false);
   const [showYearPopover, setShowYearPopover] = useState(false);
   const [showLayerModal, setShowLayerModal]       = useState(false);
   const [editingLayer, setEditingLayer]           = useState<number | null>(null);
@@ -1381,7 +1325,6 @@ const ComplexityTimeline = () => {
   const [topicalPrintMode, setTopicalPrintMode] = useState(false);
   const topicalViewRef = useRef<HTMLDivElement>(null);
 
-  const exportBtnRef     = useRef<HTMLButtonElement>(null);
   const yearBtnRef       = useRef<HTMLButtonElement>(null);
   const timelineRef      = useRef<HTMLDivElement>(null);
   const svgRef           = useRef<SVGSVGElement>(null);
@@ -1409,7 +1352,9 @@ const ComplexityTimeline = () => {
     : Math.max(COLUMN_HEADER_H, 10 + maxTitleLines * 13 + dateRowH + maxDescLines * 11 + 6);
   const topReserveH = colHeaderH + trendRegisterH;
 
-  const selectedProfile = EXPORT_PROFILES.find(p => p.id === selectedProfileId) ?? EXPORT_PROFILES[0];
+  const selectedProfile = (fixedCanvasWidth
+    ? EXPORT_PROFILES.find(p => Math.round(p.pxWidth / 2) === fixedCanvasWidth)
+    : undefined) ?? EXPORT_PROFILES[0];
   const canvasWidth = fixedCanvasWidth ?? (containerWidth > 0 ? containerWidth : CANVAS_WIDTH_INIT);
   const uniformLayerH = (() => {
     if (selectedProfile.ratio === 0 || layers.length === 0) return LAYER_HEIGHT_DEFAULT;
@@ -1538,7 +1483,6 @@ const ComplexityTimeline = () => {
         setSelectedEvent(null);
         setSelectedLabel(null);
         setPendingConnection(null);
-        setShowExportPopover(false);
         setShowYearPopover(false);
         setShowLayerModal(false);
         setEditingLayer(null);
@@ -1605,7 +1549,7 @@ const ComplexityTimeline = () => {
   // When the export size profile changes, redistribute layer heights uniformly
   // for the new aspect ratio (clearing the array makes effectiveHeights fall
   // through to the freshly-computed uniformLayerH for the new profile).
-  useEffect(() => { setLayerHeights([]); }, [selectedProfileId]);
+  useEffect(() => { setLayerHeights([]); }, [fixedCanvasWidth]);
 
   // ── ResizeObserver: track the canvas area's actual pixel width ──
   useEffect(() => {
@@ -2198,7 +2142,7 @@ const ComplexityTimeline = () => {
 
   // ── Export / Import ──
   // version bumped whenever the saved-data shape changes, so importJSON can
-  // reason about older files (e.g. ones missing selectedProfileId).
+  // reason about older files.
   const TIMELINE_FILE_VERSION = 5;
 
   const exportJSON = async () => {
@@ -2207,7 +2151,6 @@ const ComplexityTimeline = () => {
       layers, layerDescriptions, startYear, endYear,
       events, connections, columns, trends, cuts,
       canvasLabels,
-      selectedProfileId,
       layerHeights,
       topicalEvents,
     };
@@ -2286,10 +2229,6 @@ const ComplexityTimeline = () => {
         }
         setTrends(Array.isArray(data.trends) ? data.trends : []);
         setCuts(Array.isArray(data.cuts) ? data.cuts : []);
-        if (typeof data.selectedProfileId === 'string' &&
-            EXPORT_PROFILES.some(p => p.id === data.selectedProfileId)) {
-          setSelectedProfileId(data.selectedProfileId);
-        }
         // Clear any in-progress selection/edit state from the timeline we're replacing.
         setSelectedEvent(null);
         setSelectedTrend(null);
@@ -2643,6 +2582,30 @@ const ComplexityTimeline = () => {
         ctx.fillText(yr.toString(), x, axY + 18);
       }
     }
+
+    // Canvas labels — drawn last so they float above everything
+    canvasLabels.forEach(lbl => {
+      const padX = 10, padY = 8;
+      const fontSize = Math.round(10 * fontScale);
+      ctx.font = `${fontSize}px "Alegreya Sans"`;
+      const lblW = lbl.width ?? Math.max(80, ctx.measureText(lbl.text).width + padX * 2);
+      const lines = wrapCanvasText(ctx, lbl.text, lblW - padX * 2);
+      const lineH = fontSize * 1.4;
+      const lblH = lines.length * lineH + padY * 2;
+      const lx = (lbl.x / 100) * w;
+      const ly = lbl.y;
+      ctx.save();
+      ctx.fillStyle = lbl.bgColor;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(lx, ly, lblW, lblH, 4);
+      else ctx.rect(lx, ly, lblW, lblH);
+      ctx.fill();
+      ctx.fillStyle = '#3E3B35';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      lines.forEach((line, li) => ctx.fillText(line, lx + padX, ly + padY + li * lineH));
+      ctx.restore();
+    });
   }
 
   const exportPNG = async (profile: ExportProfile) => {
@@ -2858,33 +2821,13 @@ const ComplexityTimeline = () => {
           <button className="u-btn u-btn--export" onClick={exportJSON} title="Save timeline as .und file">
             <MSIcon n="file_save" /> Save
           </button>
-          <div className="u-toolbar-popover-anchor">
-            <button
-              ref={exportBtnRef}
-              className="u-btn u-btn--export"
-              onClick={() => setShowExportPopover(v => !v)}
-              aria-haspopup="listbox"
-              aria-expanded={showExportPopover}
-              title="Export as PNG image"
-            >
-              <MSIcon n="image" /> Export
-            </button>
-            <ToolbarPopover
-              open={showExportPopover}
-              onClose={() => setShowExportPopover(false)}
-              triggerRef={exportBtnRef}
-            >
-              <ExportSizePopover
-                profiles={EXPORT_PROFILES}
-                selectedId={selectedProfileId}
-                onSelect={setSelectedProfileId}
-                onConfirmExport={() =>
-                  viewMode === 'topical' ? exportTopicalPNG() : exportPNG(selectedProfile)
-                }
-                onClose={() => setShowExportPopover(false)}
-              />
-            </ToolbarPopover>
-          </div>
+          <button
+            className="u-btn u-btn--export"
+            onClick={() => viewMode === 'topical' ? exportTopicalPNG() : exportPNG(selectedProfile)}
+            title={`Export as PNG — ${selectedProfile.label}`}
+          >
+            <MSIcon n="image" /> Export
+          </button>
           <div className="u-toolbar-sep" />
           <div className="u-toolbar-popover-anchor">
             <YearRangeChip
